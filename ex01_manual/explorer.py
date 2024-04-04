@@ -21,6 +21,8 @@ class Explorer(AbstAgent):
         super().__init__(env, config_file)
         self.set_state(VS.ACTIVE)
         
+        self.walls = []
+        self.victims = []      
         # Specific initialization for the rescuer
         self.resc = resc           # reference to the rescuer agent   
     
