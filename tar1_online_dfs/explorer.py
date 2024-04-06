@@ -37,7 +37,9 @@ class Explorer(AbstAgent):
 
         super().__init__(env, config_file)
         self.walk_stack = Stack()  # a stack to store the movements
-        self.set_state(VS.ACTIVE)  # explorer is active since the begin
+        self.untried_stack = Stack() # a stack to store the untried movements
+        self.results = []           # a table to store results given results(previous_state, action) = state
+        self.set_state(VS.ACTIVE)  # explorer is active since the beginning
         self.resc = resc           # reference to the rescuer agent
         self.x = 0                 # current x position relative to the origin 0
         self.y = 0                 # current y position relative to the origin 0
@@ -62,10 +64,36 @@ class Explorer(AbstAgent):
             # Check if the corresponding position in walls_and_lim is CLEAR
             if obstacles[direction] == VS.CLEAR:
                 return Explorer.AC_INCR[direction]
+
+    def actions(self):
+        obstacles = self.check_walls_and_lim()
+        i = 0
+        for obstacle in obstacles:
+            if obstacles[i] == VS.CLEAR:
+                self.untried_stack.push(Explorer.AC_INCR[i])
+            i += 1
+
+    def online_dfs(self):
+        consumed_time = self.TLIM - self.get_rtime()
+        if consumed_time > self.get_rtime():
+            self.resc.go_save_victims(self.map, self.victims)
+
+        if self.untried_stack.is_empty():
+            self.actions()
+        if self.untried_stack.is_empty():
+            if self.walk_stack.is_empty():
+                self.resc.go_save_victims(self.map, self.victims)
+            else:
+                result = self.walk_stack.pop()
+                action = self.results[result]
+        else:
+            action = self.untried_stack.pop()
+        return action
         
     def explore(self):
+
         # get an random increment for x and y       
-        dx, dy = self.get_next_position()
+        dx, dy = self.online_dfs()
 
         # Moves the body to another position
         rtime_bef = self.get_rtime()
