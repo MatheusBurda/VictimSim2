@@ -27,6 +27,7 @@ class Stack:
     def is_empty(self):
         return len(self.items) == 0
 
+
 class Explorer(AbstAgent):
     def __init__(self, env, config_file, resc):
         """ Construtor do agente random on-line
@@ -39,6 +40,7 @@ class Explorer(AbstAgent):
         self.walk_stack = Stack()  # a stack to store the movements
         self.untried_stack = Stack() # a stack to store the untried movements
         self.results = []           # a table to store results given results(previous_state, action) = state
+        self.cells_visited = {}      # a table to store the visited cells
         self.set_state(VS.ACTIVE)  # explorer is active since the beginning
         self.resc = resc           # reference to the rescuer agent
         self.x = 0                 # current x position relative to the origin 0
@@ -64,32 +66,38 @@ class Explorer(AbstAgent):
             # Check if the corresponding position in walls_and_lim is CLEAR
             if obstacles[direction] == VS.CLEAR:
                 return Explorer.AC_INCR[direction]
-
-    def actions(self):
+    
+    def __get_current_pos(self) -> tuple:
+        return (self.x, self.y)
+    
+    def actions(self) -> tuple:
         obstacles = self.check_walls_and_lim()
-        i = 0
-        for obstacle in obstacles:
-            if obstacles[i] == VS.CLEAR:
-                self.untried_stack.push(Explorer.AC_INCR[i])
-            i += 1
+        # indexa os obstaculos para cada celula
+        self.cells_visited[self.__get_current_pos()] = obstacles
+
+        print(f'{self.__get_current_pos()} -> Obstacles:\n{obstacles}\n\n')
+
+        for i, obstacle in enumerate(obstacles):
+            print(self.__get_current_pos(), i, obstacle)
+            if obstacle == VS.CLEAR:
+                return Explorer.AC_INCR[i]
+
 
     def online_dfs(self):
         consumed_time = self.TLIM - self.get_rtime()
         if consumed_time > self.get_rtime():
             self.resc.go_save_victims(self.map, self.victims)
 
-        if self.untried_stack.is_empty():
-            self.actions()
-        if self.untried_stack.is_empty():
-            if self.walk_stack.is_empty():
-                self.resc.go_save_victims(self.map, self.victims)
-            else:
-                result = self.walk_stack.pop()
-                action = self.results[result]
-        else:
-            action = self.untried_stack.pop()
-        return action
+        # print(f'Pos: {self.__get_current_pos()} -> {self.cells_visited.keys()}')
+
+        if self.__get_current_pos() not in self.cells_visited.keys():
+            action = self.actions()
+            # print(f'Action: {action}')
+            return action
+
         
+        
+
     def explore(self):
 
         # get an random increment for x and y       
