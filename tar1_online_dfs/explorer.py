@@ -38,9 +38,12 @@ class Explorer(AbstAgent):
 
         super().__init__(env, config_file)
         self.walk_stack = Stack()  # a stack to store the movements
+        #TODO: is it used?
         self.untried_stack = Stack() # a stack to store the untried movements
+
+        self.backtracking_stack = Stack()   # a stack to store the backtracking positions to a avaiable node
         self.results = []           # a table to store results given results(previous_state, action) = state
-        self.cells_visited = {}      # a table to store the visited cells
+        self.cells_known = {(0,0): {"visited": True}}      # a table to store the visited cells
         self.set_state(VS.ACTIVE)  # explorer is active since the beginning
         self.resc = resc           # reference to the rescuer agent
         self.x = 0                 # current x position relative to the origin 0
@@ -67,41 +70,66 @@ class Explorer(AbstAgent):
             if obstacles[direction] == VS.CLEAR:
                 return Explorer.AC_INCR[direction]
     
+
     def __get_current_pos(self) -> tuple:
         return (self.x, self.y)
     
+
     def actions(self) -> tuple:
         obstacles = self.check_walls_and_lim()
-        # indexa os obstaculos para cada celula
-        self.cells_visited[self.__get_current_pos()] = obstacles
+        
+        #TODO: Row to preferred direction
 
-        print(f'{self.__get_current_pos()} -> Obstacles:\n{obstacles}\n\n')
-
+        possible_actions = []
+        
         for i, obstacle in enumerate(obstacles):
-            print(self.__get_current_pos(), i, obstacle)
+
             if obstacle == VS.CLEAR:
-                return Explorer.AC_INCR[i]
+                action = Explorer.AC_INCR[i]
+                possible_actions.append(action)
+        
+        return possible_actions
 
 
     def online_dfs(self):
-        consumed_time = self.TLIM - self.get_rtime()
-        if consumed_time > self.get_rtime():
-            self.resc.go_save_victims(self.map, self.victims)
-
-        # print(f'Pos: {self.__get_current_pos()} -> {self.cells_visited.keys()}')
-
-        if self.__get_current_pos() not in self.cells_visited.keys():
-            action = self.actions()
-            # print(f'Action: {action}')
-            return action
-
         
+        possible_actions = self.actions()
+
+        current_pos = self.__get_current_pos()
+
+        for action in possible_actions:
+
+            next_position = (current_pos[0] + action[0], current_pos[1] + action[1])
+            
+            if next_position not in self.cells_known.keys():
+                self.cells_known[next_position] = {"visited": False}
+
+            if not self.cells_known[next_position]["visited"]:
+                return action
         
+        # TODO: Implement A* to find best way out to a valid 
+
+        return 0, 0
+        
+
+    def update_costs(self):
+        pass
+
+    
 
     def explore(self):
 
         # get an random increment for x and y       
         dx, dy = self.online_dfs()
+
+        # print(self.cells_known, self.__get_current_pos())
+
+        # new_cost = self.cells_known[self.__get_current_pos()]
+
+        # if abs(dx) > 0 and abs(dx) > 0:
+        #     new_cost += self.COST_DIAG
+        # elif abs(dx) > 0 or abs(dx) > 0:
+        #     new_cost += self.COST_LINE
 
         # Moves the body to another position
         rtime_bef = self.get_rtime()
@@ -116,6 +144,9 @@ class Explorer(AbstAgent):
             #print(f"{self.NAME}: Wall or grid limit reached at ({self.x + dx}, {self.y + dy})")
 
         if result == VS.EXECUTED:
+
+            self.cells_known[self.__get_current_pos()]["visited"] = True
+
             # check for victim returns -1 if there is no victim or the sequential
             # the sequential number of a found victim
             self.walk_stack.push((dx, dy))
