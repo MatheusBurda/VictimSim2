@@ -59,7 +59,7 @@ class Explorer(AbstAgent):
 
         self.backtracking_stack = Stack()   # a stack to store the backtracking positions to a avaiable node
         self.results = []           # a table to store results given results(previous_state, action) = state
-        self.cells_known = {(0,0): {"visited": True, "cost_to_origin" : 0,  "dificulty" : 0}}      # a table to store the visited cells
+        self.cells_known = {(0,0): {"visited": True, "cost_to_origin" : 0,  "difficulty" : 0}}      # a table to store the visited cells
         self.set_state(VS.ACTIVE)  # explorer is active since the beginning
         self.resc = resc           # reference to the rescuer agent
         self.x = 0                 # current x position relative to the origin 0
@@ -207,10 +207,17 @@ class Explorer(AbstAgent):
         dx = current_point[0] - next_point[0]
         dy = current_point[1] - next_point[1]
         
+        try:
+            cost = self.cells_known[next_point]["difficulty"]
+        except KeyError:
+            # the cell is known but not visited, thus dont know the difficulty, assumes 0
+            cost = 0
+            
         if abs(dx) > 0 and abs(dy) > 0:
-            return self.COST_DIAG
+            return cost + self.COST_DIAG
         elif abs(dx) > 0 or abs(dy) > 0:
-            return self.COST_LINE
+            return cost + self.COST_LINE
+        
         return 0
 
 
@@ -221,6 +228,10 @@ class Explorer(AbstAgent):
         else:
             # get an random increment for x and y       
             dx, dy = self.online_dfs()
+            if (dx,dy) != (0, 0):
+                # calculates the cost to origin for each new cell visited and populates dict
+                next_pos = (self.x + dx, self.y + dy)
+                self.cells_known[next_pos]['cost_to_origin'] = self.a_star_search(next_pos, (0,0))[1]
 
         if dx == dy == 0:
             self.backtrack()
@@ -243,7 +254,7 @@ class Explorer(AbstAgent):
             #print(f"{self.NAME}: Wall or grid limit reached at ({self.x + dx}, {self.y + dy})")
 
         if result == VS.EXECUTED:
-
+            
             self.cells_known[self.__get_current_pos()]["visited"] = True
 
             print(f'visited {self.__get_current_pos()}: {self.get_rtime()}')
