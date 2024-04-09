@@ -174,19 +174,29 @@ class Explorer(AbstAgent):
             
             if current == goal:
                 break
-            
-            actions = self.actions()
 
             cells_nearby = [pos for pos, _ in self.cells_known.items() if abs(pos[0] - current[0]) == 1 or abs(pos[1] - current[1]) == 1]
-            for next in actions:
-                new_cost = cost_so_far[current] + self.update_costs()
-                if next not in cost_so_far or new_cost < cost_so_far[next]:
+
+            for next in cells_nearby:
+                new_cost = cost_so_far[current] + self.update_costs(current, next)
+                if next not in cost_so_far.keys() or new_cost < cost_so_far[next]:
                     cost_so_far[next] = new_cost
                     priority = new_cost + heuristic(next, goal)
                     frontier.put(next, priority)
                     came_from[next] = current
         
-        return came_from, cost_so_far
+        return came_from, cost_so_far[came_from[-1]]
+
+
+    def update_costs(self, current_point, next_point):
+        dx = current_point[0] - next_point[0]
+        dy = current_point[1] - next_point[1]
+        
+        if abs(dx) > 0 and abs(dy) > 0:
+            return self.COST_DIAG
+        elif abs(dx) > 0 or abs(dy) > 0:
+            return self.COST_LINE
+        return 0
 
 
     def explore(self):
