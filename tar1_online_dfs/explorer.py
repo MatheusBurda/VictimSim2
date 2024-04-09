@@ -94,8 +94,6 @@ class Explorer(AbstAgent):
 
     def actions(self) -> tuple:
         obstacles = self.check_walls_and_lim()
-        
-        # self.cells_known[self.__get_current_pos()]["obstacles"] = obstacles
 
         #TODO: Row to preferred direction
 
@@ -135,15 +133,11 @@ class Explorer(AbstAgent):
 
 
     def backtrack(self):
-        # TODO: Implement A* to find best way out to a valid 
-        possible_goals = [key for key, value in self.cells_known.items() if value["visited"] == False]
-        
+        possible_goals = [key for key, value in self.cells_known.items() if value["visited"] == False and key != self.__get_current_pos()]          
+
         min_cost = None
         best_path = None
-        print(self.cells_known.items())
-        print(possible_goals)
         for goal in possible_goals:
-            print(self.__get_current_pos(), goal)
             path, cost = self.a_star_search(self.__get_current_pos(), goal)
             if min_cost is None or cost < min_cost:
                 min_cost = cost
@@ -151,8 +145,9 @@ class Explorer(AbstAgent):
 
         last_step = best_path[-1]
         for step in reversed(best_path[:-1]):
-            delta_step = (last_step[0]-step[0], last_step[1]-step[1])
+            delta_step = (step[0]-last_step[0], step[1]-last_step[1])
             self.backtracking_stack.push(delta_step)
+            last_step = step
 
 
     def a_star_search(self, start, goal):
@@ -161,6 +156,19 @@ class Explorer(AbstAgent):
             (x1, y1) = a
             (x2, y2) = b
             return abs(x1 - x2) + abs(y1 - y2)
+        
+
+        def reconstruct_path(came_from, start, goal):
+            current = goal
+            path = []
+            if goal not in came_from:
+                return []
+            while current != start:
+                path.append(current)
+                current = came_from[current]
+            path.append(start) 
+            return path
+
 
         frontier = PriorityQueue()
         frontier.put(start, 0)
@@ -175,7 +183,7 @@ class Explorer(AbstAgent):
             if current == goal:
                 break
 
-            cells_nearby = [pos for pos, _ in self.cells_known.items() if abs(pos[0] - current[0]) == 1 or abs(pos[1] - current[1]) == 1]
+            cells_nearby = [pos for pos, _ in self.cells_known.items() if abs(pos[0] - current[0]) <= 1 and abs(pos[1] - current[1]) <= 1]
 
             for next in cells_nearby:
                 new_cost = cost_so_far[current] + self.update_costs(current, next)
@@ -184,8 +192,10 @@ class Explorer(AbstAgent):
                     priority = new_cost + heuristic(next, goal)
                     frontier.put(next, priority)
                     came_from[next] = current
-        
-        return came_from, cost_so_far[came_from[-1]]
+
+        path = reconstruct_path(came_from, start, goal)
+
+        return path, cost_so_far[goal]
 
 
     def update_costs(self, current_point, next_point):
@@ -209,20 +219,11 @@ class Explorer(AbstAgent):
 
         if dx == dy == 0:
             self.backtrack()
-            if len(self.backtracking_stack) > 0:
+            if not self.backtracking_stack.is_empty():
                 dx, dy = self.backtracking_stack.pop()
             else:
                 #TODO: return to the base (no more tiles unvisited)
                 dx, dy = 0, 0
-
-        # print(self.cells_known, self.__get_current_pos())
-
-        # new_cost = self.cells_known[self.__get_current_pos()]
-
-        # if abs(dx) > 0 and abs(dx) > 0:
-        #     new_cost += self.COST_DIAG
-        # elif abs(dx) > 0 or abs(dx) > 0:
-        #     new_cost += self.COST_LINE
 
         # Moves the body to another position
         rtime_bef = self.get_rtime()
