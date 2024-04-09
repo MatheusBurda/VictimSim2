@@ -100,7 +100,6 @@ class Explorer(AbstAgent):
         possible_actions = []
         
         for i, obstacle in enumerate(obstacles):
-
             if obstacle == VS.CLEAR:
                 action = Explorer.AC_INCR[i]
                 possible_actions.append(action)
@@ -139,9 +138,14 @@ class Explorer(AbstAgent):
         best_path = None
         for goal in possible_goals:
             path, cost = self.a_star_search(self.__get_current_pos(), goal)
-            if min_cost is None or cost < min_cost:
+            if path == [] or cost == -1:
+                pass
+            elif min_cost is None or cost < min_cost:
                 min_cost = cost
                 best_path = path
+
+        if not best_path:
+            return
 
         last_step = best_path[-1]
         for step in reversed(best_path[:-1]):
@@ -161,8 +165,6 @@ class Explorer(AbstAgent):
         def reconstruct_path(came_from, start, goal):
             current = goal
             path = []
-            if goal not in came_from:
-                return []
             while current != start:
                 path.append(current)
                 current = came_from[current]
@@ -192,6 +194,9 @@ class Explorer(AbstAgent):
                     priority = new_cost + heuristic(next, goal)
                     frontier.put(next, priority)
                     came_from[next] = current
+
+        if goal not in came_from:
+            return [], -1
 
         path = reconstruct_path(came_from, start, goal)
 
@@ -240,6 +245,8 @@ class Explorer(AbstAgent):
         if result == VS.EXECUTED:
 
             self.cells_known[self.__get_current_pos()]["visited"] = True
+
+            print(f'visited {self.__get_current_pos()}: {self.get_rtime()}')
 
             # check for victim returns -1 if there is no victim or the sequential
             # the sequential number of a found victim
