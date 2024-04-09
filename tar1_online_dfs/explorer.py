@@ -59,7 +59,7 @@ class Explorer(AbstAgent):
 
         self.backtracking_stack = Stack()   # a stack to store the backtracking positions to a avaiable node
         self.results = []           # a table to store results given results(previous_state, action) = state
-        self.cells_known = {(0,0): {"visited": True, "cost_to_origin" : 0}}      # a table to store the visited cells
+        self.cells_known = {(0,0): {"visited": True, "cost_to_origin" : 0,  "dificulty" : 0}}      # a table to store the visited cells
         self.set_state(VS.ACTIVE)  # explorer is active since the beginning
         self.resc = resc           # reference to the rescuer agent
         self.x = 0                 # current x position relative to the origin 0
@@ -271,6 +271,8 @@ class Explorer(AbstAgent):
                 difficulty = difficulty / self.COST_LINE
             else:
                 difficulty = difficulty / self.COST_DIAG
+            
+            self.cells_known[self.__get_current_pos()]["difficulty"] = difficulty
 
             # Update the map with the new cell
             self.map.add((self.x, self.y), difficulty, seq, self.check_walls_and_lim())
