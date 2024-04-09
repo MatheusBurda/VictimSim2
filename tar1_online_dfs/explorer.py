@@ -12,6 +12,22 @@ from abc import ABC, abstractmethod
 from vs.abstract_agent import AbstAgent
 from vs.constants import VS
 from map import Map
+import heapq
+
+
+class PriorityQueue:
+    def __init__(self):
+        self.elements = []
+    
+    def empty(self) -> bool:
+        return not self.elements
+    
+    def put(self, item, priority: float):
+        heapq.heappush(self.elements, (priority, item))
+    
+    def get(self):
+        return heapq.heappop(self.elements)[1]
+
 
 class Stack:
     def __init__(self):
@@ -43,7 +59,7 @@ class Explorer(AbstAgent):
 
         self.backtracking_stack = Stack()   # a stack to store the backtracking positions to a avaiable node
         self.results = []           # a table to store results given results(previous_state, action) = state
-        self.cells_known = {(0,0): {"visited": True}}      # a table to store the visited cells
+        self.cells_known = {(0,0): {"visited": True, "cost_to_origin" : 0}}      # a table to store the visited cells
         self.set_state(VS.ACTIVE)  # explorer is active since the beginning
         self.resc = resc           # reference to the rescuer agent
         self.x = 0                 # current x position relative to the origin 0
@@ -54,6 +70,7 @@ class Explorer(AbstAgent):
 
         # put the current position - the base - in the map
         self.map.add((self.x, self.y), 1, VS.NO_VICTIM, self.check_walls_and_lim())
+
 
     def get_next_position(self):
         """ Randomically, gets the next position that can be explored (no wall and inside the grid)
@@ -78,6 +95,8 @@ class Explorer(AbstAgent):
     def actions(self) -> tuple:
         obstacles = self.check_walls_and_lim()
         
+        # self.cells_known[self.__get_current_pos()]["obstacles"] = obstacles
+
         #TODO: Row to preferred direction
 
         possible_actions = []
@@ -97,6 +116,8 @@ class Explorer(AbstAgent):
 
         current_pos = self.__get_current_pos()
 
+        next_action = None
+
         for action in possible_actions:
 
             next_position = (current_pos[0] + action[0], current_pos[1] + action[1])
@@ -104,23 +125,85 @@ class Explorer(AbstAgent):
             if next_position not in self.cells_known.keys():
                 self.cells_known[next_position] = {"visited": False}
 
-            if not self.cells_known[next_position]["visited"]:
-                return action
+            if self.cells_known[next_position]["visited"] == False and not next_action:
+                next_action = action
+
+        if not next_action:
+            return 0,0
         
+        return next_action
+
+
+    def backtrack(self):
         # TODO: Implement A* to find best way out to a valid 
-
-        return 0, 0
+        possible_goals = [key for key, value in self.cells_known.items() if value["visited"] == False]
         
+        min_cost = None
+        best_path = None
+        print(self.cells_known.items())
+        print(possible_goals)
+        for goal in possible_goals:
+            print(self.__get_current_pos(), goal)
+            path, cost = self.a_star_search(self.__get_current_pos(), goal)
+            if min_cost is None or cost < min_cost:
+                min_cost = cost
+                best_path = path
 
-    def update_costs(self):
-        pass
+        last_step = best_path[-1]
+        for step in reversed(best_path[:-1]):
+            delta_step = (last_step[0]-step[0], last_step[1]-step[1])
+            self.backtracking_stack.push(delta_step)
 
-    
+
+    def a_star_search(self, start, goal):
+
+        def heuristic(a, b) -> float:
+            (x1, y1) = a
+            (x2, y2) = b
+            return abs(x1 - x2) + abs(y1 - y2)
+
+        frontier = PriorityQueue()
+        frontier.put(start, 0)
+        came_from = {}
+        cost_so_far = {}
+        came_from[start] = None
+        cost_so_far[start] = 0
+        
+        while not frontier.empty():
+            current = frontier.get()
+            
+            if current == goal:
+                break
+            
+            actions = self.actions()
+
+            cells_nearby = [pos for pos, _ in self.cells_known.items() if abs(pos[0] - current[0]) == 1 or abs(pos[1] - current[1]) == 1]
+            for next in actions:
+                new_cost = cost_so_far[current] + self.update_costs()
+                if next not in cost_so_far or new_cost < cost_so_far[next]:
+                    cost_so_far[next] = new_cost
+                    priority = new_cost + heuristic(next, goal)
+                    frontier.put(next, priority)
+                    came_from[next] = current
+        
+        return came_from, cost_so_far
+
 
     def explore(self):
 
-        # get an random increment for x and y       
-        dx, dy = self.online_dfs()
+        if not self.backtracking_stack.is_empty():
+            dx, dy = self.backtracking_stack.pop()
+        else:
+            # get an random increment for x and y       
+            dx, dy = self.online_dfs()
+
+        if dx == dy == 0:
+            self.backtrack()
+            if len(self.backtracking_stack) > 0:
+                dx, dy = self.backtracking_stack.pop()
+            else:
+                #TODO: return to the base (no more tiles unvisited)
+                dx, dy = 0, 0
 
         # print(self.cells_known, self.__get_current_pos())
 
