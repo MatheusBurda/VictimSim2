@@ -155,9 +155,25 @@ class Explorer(AbstAgent):
             last_step = step
 
 
+    def update_costs(self, current_point, next_point):
+        dx = current_point[0] - next_point[0]
+        dy = current_point[1] - next_point[1]
+        
+        try:
+            difficulty = self.cells_known[next_point]["difficulty"]
+        except KeyError:
+            # the cell is known but not visited, thus dont know the difficulty, assumes 0
+            difficulty = 0
+
+        if dx == 0 or dy == 0:
+            return difficulty * self.COST_LINE
+        else:
+            return difficulty * self.COST_DIAG
+
+
     def a_star_search(self, start, goal):
 
-        def heuristic(a, b) -> float:
+        def heuristic(a, b):
             (x1, y1) = a
             (x2, y2) = b
             return abs(x1 - x2) + abs(y1 - y2)
@@ -171,7 +187,7 @@ class Explorer(AbstAgent):
                 current = came_from[current]
             path.append(start) 
             return path
-
+        
 
         frontier = PriorityQueue()
         frontier.put(start, 0)
@@ -187,7 +203,6 @@ class Explorer(AbstAgent):
                 break
 
             cells_nearby = []
-
             for pos, key_value in self.cells_known.items():
                 if abs(pos[0] - current[0]) <= 1 and abs(pos[1] - current[1]) <= 1 and (key_value["visited"] == True or pos == goal):
                     cells_nearby.append(pos)
@@ -204,25 +219,8 @@ class Explorer(AbstAgent):
             return [], -1
 
         path = reconstruct_path(came_from, start, goal)
-        self.cells_known[goal]["cost_to_origin"] = cost_so_far[goal]
 
         return path, cost_so_far[goal]
-
-
-    def update_costs(self, current_point, next_point):
-        dx = current_point[0] - next_point[0]
-        dy = current_point[1] - next_point[1]
-        
-        try:
-            difficulty = self.cells_known[next_point]["difficulty"]
-        except KeyError:
-            # the cell is known but not visited, thus dont know the difficulty, assumes 0
-            difficulty = 0
-
-        if dx == 0 or dy == 0:
-            return difficulty * self.COST_LINE
-        else:
-            return difficulty * self.COST_DIAG
 
 
     def explore(self):
@@ -267,17 +265,18 @@ class Explorer(AbstAgent):
 
             # Check for victims
             seq = self.check_for_victim()
-            has_read_vital = False
+            # has_read_vital = False
             if seq != VS.NO_VICTIM and (self.__get_current_pos() not in self.victims.keys()):
                 vs = self.read_vital_signals()
-                has_read_vital = True
-                self.victims[self.__get_current_pos()] = {'signals' : vs}
+                # has_read_vital = True
+                self.victims[self.__get_current_pos()] = {'id': seq, 'signals' : vs}
                 print(f"{self.NAME} Victim found at ({self.x}, {self.y}), rtime: {self.get_rtime()}")
+            
             
             # Calculates the difficulty of the visited cell
             difficulty = (rtime_bef - rtime_aft)
-            if has_read_vital:
-                difficulty -= self.COST_READ
+            # if has_read_vital:
+            #     difficulty -= self.COST_READ
             if dx == 0 or dy == 0:
                 difficulty = difficulty / self.COST_LINE
             else:
@@ -292,7 +291,6 @@ class Explorer(AbstAgent):
         return
     
     def stack_comeback(self, path):
-
         if not self.walk_stack.is_empty():
             self.walk_stack = Stack()
         while len(path) > 1:
@@ -304,38 +302,41 @@ class Explorer(AbstAgent):
 
     def come_back(self):
         # Will keep executing untill stack is empty
-        while not self.walk_stack.is_empty():
-            dx, dy = self.walk_stack.pop()
-            dx = dx * -1
-            dy = dy * -1
+        dx, dy = self.walk_stack.pop()
+        dx = dx * -1
+        dy = dy * -1
 
-            result = self.walk(dx, dy)
-            if result == VS.BUMPED:
-                print(f"{self.NAME}: when coming back bumped at ({self.x+dx}, {self.y+dy}) , rtime: {self.get_rtime()}")
-                return
-            
-            if result == VS.EXECUTED:
-                # update the agent's position relative to the origin
-                self.x += dx
-                self.y += dy
-                print(f"{self.NAME}: coming back at ({self.x}, {self.y}), rtime: {self.get_rtime()}")
+        result = self.walk(dx, dy)
+        if result == VS.BUMPED:
+            print(f"{self.NAME}: when coming back bumped at ({self.x+dx}, {self.y+dy}) , rtime: {self.get_rtime()}")
+            return
+        
+        if result == VS.EXECUTED:
+            # update the agent's position relative to the origin
+            self.x += dx
+            self.y += dy
+            print(f"{self.NAME}: coming back at ({self.x}, {self.y}), rtime: {self.get_rtime()}")
+        
         
     def deliberate(self) -> bool:
         """ The agent chooses the next action. The simulator calls this
         method at each cycle. Must be implemented in every agent"""
 
-        path, cost = self.a_star_search(self.__get_current_pos(), (0,0))
-
-        print(f'cost to base: {cost}')
-        print(f'cell difficulty: {self.cells_known[self.__get_current_pos()]["difficulty"]}\n')
-        if cost < self.get_rtime():
-            self.explore()
-            return True
-        elif self.time_to_come_back == False:
-            print(f"{self.NAME}: RETURNING TO BASE ##########")
-            self.stack_comeback(path)
+        if self.time_to_come_back and not self.walk_stack.is_empty():
             self.come_back()
-            self.time_to_come_back = True
+
+        else:
+            path, cost = self.a_star_search(self.__get_current_pos(), (0,0))
+
+            print(f'cost to base: {cost}')
+            print(f'cell difficulty: {self.cells_known[self.__get_current_pos()]["difficulty"]}\n')
+            if cost < self.get_rtime():
+                self.explore()
+                return True
+            elif self.time_to_come_back == False:
+                print(f"{self.NAME}: RETURNING TO BASE ##########")
+                self.stack_comeback(path)
+                self.time_to_come_back = True
 
         # time to come back to the base
         if self.walk_stack.is_empty() or (self.x == 0 and self.y == 0):
