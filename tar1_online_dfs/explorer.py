@@ -282,8 +282,6 @@ class Explorer(AbstAgent):
             
             # Calculates the difficulty of the visited cell
             difficulty = (rtime_bef - rtime_aft)
-            # if has_read_vital:
-            #     difficulty -= self.COST_READ
             if dx == 0 or dy == 0:
                 difficulty = difficulty / self.COST_LINE
             else:
@@ -336,8 +334,8 @@ class Explorer(AbstAgent):
         else:
             path, cost = self.a_star_search(self.__get_current_pos(), (0,0))
 
-            print(f'{self.__get_current_pos()} cell difficulty: {self.cells_known[self.__get_current_pos()]["difficulty"]}')
-            print(f'{self.__get_current_pos()} cost to base: {cost}')
+            # print(f'{self.__get_current_pos()} cell difficulty: {self.cells_known[self.__get_current_pos()]["difficulty"]}')
+            # print(f'{self.__get_current_pos()} cost to base: {cost}')
             if cost < self.get_rtime():
                 self.explore()
                 return True
