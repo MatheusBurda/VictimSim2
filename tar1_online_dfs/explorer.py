@@ -204,6 +204,7 @@ class Explorer(AbstAgent):
             return [], -1
 
         path = reconstruct_path(came_from, start, goal)
+        self.cells_known[goal]["cost_to_origin"] = cost_so_far[goal]
 
         return path, cost_so_far[goal]
 
@@ -291,42 +292,48 @@ class Explorer(AbstAgent):
         return
     
     def stack_comeback(self, path):
-        if self.walk_stack.is_empty():
-            while len(path) > 1:
-                dx = path[1][0] - path[0][0]
-                dy = path[1][1] - path[0][1]
-                self.walk_stack.push((dx, dy))
-                path.pop(0)
+        if not self.walk_stack.is_empty():
+            # Clears the stack
+            self.walk_stack = Stack()
+
+        while len(path) > 1:
+            dx = path[1][0] - path[0][0]
+            dy = path[1][1] - path[0][1]
+            self.walk_stack.push((dx, dy))
+            path.pop(0)
+
 
     def come_back(self):
-        dx, dy = self.walk_stack.pop()
-        dx = dx * -1
-        dy = dy * -1
+        # Will keep executing untill stack is empty
+        while not self.walk_stack.is_empty():
+            dx, dy = self.walk_stack.pop()
+            dx = dx * -1
+            dy = dy * -1
 
-        result = self.walk(dx, dy)
-        if result == VS.BUMPED:
-            print(f"{self.NAME}: when coming back bumped at ({self.x+dx}, {self.y+dy}) , rtime: {self.get_rtime()}")
-            return
-        
-        if result == VS.EXECUTED:
-            # update the agent's position relative to the origin
-            self.x += dx
-            self.y += dy
-            #print(f"{self.NAME}: coming back at ({self.x}, {self.y}), rtime: {self.get_rtime()}")
+            result = self.walk(dx, dy)
+            if result == VS.BUMPED:
+                print(f"{self.NAME}: when coming back bumped at ({self.x+dx}, {self.y+dy}) , rtime: {self.get_rtime()}")
+                return
+            
+            if result == VS.EXECUTED:
+                # update the agent's position relative to the origin
+                self.x += dx
+                self.y += dy
+                print(f"{self.NAME}: coming back at ({self.x}, {self.y}), rtime: {self.get_rtime()}")
         
     def deliberate(self) -> bool:
         """ The agent chooses the next action. The simulator calls this
         method at each cycle. Must be implemented in every agent"""
 
         path, cost = self.a_star_search(self.__get_current_pos(), (0,0))
+
         print(f'cost to base: {cost}')
         print(f'cell difficulty: {self.cells_known[self.__get_current_pos()]["difficulty"]}\n')
         if cost < self.get_rtime():
             self.explore()
             return True
         elif self.time_to_come_back == False:
-            print(f"{self.NAME}: COMING BACK \n")
-            self.walk_stack = Stack()
+            print(f"{self.NAME}: RETURNING TO BASE ##########")
             self.stack_comeback(path)
             self.come_back()
             self.time_to_come_back = True
@@ -340,6 +347,6 @@ class Explorer(AbstAgent):
             self.resc.go_save_victims(self.map, self.victims)
             return False
 
-        self.come_back()
+        # self.come_back()
         return True
 
