@@ -60,7 +60,7 @@ class Explorer(AbstAgent):
         self.backtracking_stack = Stack()   # a stack to store the backtracking positions to a avaiable node
         self.time_to_come_back = False
         self.results = []           # a table to store results given results(previous_state, action) = state
-        self.cells_known = {(0,0): {"visited": True, "difficulty" : 0}}      # a table to store the visited cells
+        self.cells_known = {(0,0): {"visited": True, "difficulty" : 1}}      # a table to store the visited cells
         self.set_state(VS.ACTIVE)  # explorer is active since the beginning
         self.resc = resc           # reference to the rescuer agent
         self.x = 0                 # current x position relative to the origin 0
@@ -109,7 +109,6 @@ class Explorer(AbstAgent):
 
 
     def online_dfs(self):
-        
         possible_actions = self.actions()
 
         current_pos = self.__get_current_pos()
@@ -132,8 +131,22 @@ class Explorer(AbstAgent):
         return next_action
 
 
+    def get_adjacents_unvisited(self, location):
+        adjacents = []
+        for pos, key_value in self.cells_known.items():
+            if abs(pos[0] - location[0]) <= 1 and abs(pos[1] - location[1]) <= 1 and (key_value["visited"] == False):
+                adjacents.append(pos)
+
+        return adjacents
+
+
     def backtrack(self):
-        possible_goals = [key for key, value in self.cells_known.items() if value["visited"] == False and key != self.__get_current_pos()]          
+        visited_locations = [key for key, value in self.cells_known.items() if value["visited"] == True]          
+
+        possible_goals = []
+        for pos in visited_locations:
+            if len(self.get_adjacents_unvisited(pos)) > 0:
+                possible_goals.append(pos)
 
         min_cost = None
         best_path = None
@@ -159,11 +172,7 @@ class Explorer(AbstAgent):
         dx = current_point[0] - next_point[0]
         dy = current_point[1] - next_point[1]
         
-        try:
-            difficulty = self.cells_known[next_point]["difficulty"]
-        except KeyError:
-            # the cell is known but not visited, thus dont know the difficulty, assumes 0
-            difficulty = 0
+        difficulty = self.cells_known[next_point]["difficulty"]
 
         if dx == 0 or dy == 0:
             return difficulty * self.COST_LINE
@@ -177,7 +186,6 @@ class Explorer(AbstAgent):
             (x1, y1) = a
             (x2, y2) = b
             return abs(x1 - x2) + abs(y1 - y2)
-        
 
         def reconstruct_path(came_from, start, goal):
             current = goal
@@ -187,7 +195,6 @@ class Explorer(AbstAgent):
                 current = came_from[current]
             path.append(start) 
             return path
-        
 
         frontier = PriorityQueue()
         frontier.put(start, 0)
@@ -290,6 +297,7 @@ class Explorer(AbstAgent):
 
         return
     
+
     def stack_comeback(self, path):
         if not self.walk_stack.is_empty():
             self.walk_stack = Stack()
@@ -317,7 +325,7 @@ class Explorer(AbstAgent):
             self.y += dy
             print(f"{self.NAME}: coming back at ({self.x}, {self.y}), rtime: {self.get_rtime()}")
         
-        
+
     def deliberate(self) -> bool:
         """ The agent chooses the next action. The simulator calls this
         method at each cycle. Must be implemented in every agent"""
@@ -328,8 +336,8 @@ class Explorer(AbstAgent):
         else:
             path, cost = self.a_star_search(self.__get_current_pos(), (0,0))
 
-            print(f'cost to base: {cost}')
-            print(f'cell difficulty: {self.cells_known[self.__get_current_pos()]["difficulty"]}\n')
+            print(f'{self.__get_current_pos()} cell difficulty: {self.cells_known[self.__get_current_pos()]["difficulty"]}')
+            print(f'{self.__get_current_pos()} cost to base: {cost}')
             if cost < self.get_rtime():
                 self.explore()
                 return True
