@@ -45,7 +45,7 @@ class Stack:
 
 
 class Explorer(AbstAgent):
-    def __init__(self, env, config_file, resc):
+    def __init__(self, env, config_file, resc, direction=0):
         """ Construtor do agente random on-line
         @param env: a reference to the environment 
         @param config_file: the absolute path to the explorer's config file
@@ -68,6 +68,8 @@ class Explorer(AbstAgent):
         self.map = Map()           # create a map for representing the environment
         self.victims = {}          # a dictionary of found victims: (seq): ((x,y), [<vs>])
                                    # the key is the seq number of the victim,(x,y) the position, <vs> the list of vital signals
+
+        self.preferred_direction = direction
 
         # put the current position - the base - in the map
         self.map.add((self.x, self.y), 1, VS.NO_VICTIM, self.check_walls_and_lim())
@@ -96,15 +98,22 @@ class Explorer(AbstAgent):
     def actions(self) -> tuple:
         obstacles = self.check_walls_and_lim()
 
-        #TODO: Row to preferred direction
-
         possible_actions = []
         
         for i, obstacle in enumerate(obstacles):
             if obstacle == VS.CLEAR:
                 action = Explorer.AC_INCR[i]
                 possible_actions.append(action)
+            else:
+                possible_actions.append(None)
         
+        # Rotate to preferred direction
+        rotate_n = self.preferred_direction
+        if rotate_n != 0:
+            possible_actions = possible_actions[rotate_n:] + possible_actions[:rotate_n]
+
+        possible_actions = [i for i in possible_actions if i is not None]
+
         return possible_actions
 
 
