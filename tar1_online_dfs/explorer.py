@@ -204,6 +204,7 @@ class Explorer(AbstAgent):
             return [], -1
 
         path = reconstruct_path(came_from, start, goal)
+        self.cells_known[goal]["cost_to_origin"] = cost_so_far[goal]
 
         return path, cost_so_far[goal]
 
@@ -291,12 +292,20 @@ class Explorer(AbstAgent):
         return
     
     def stack_comeback(self, path):
+<<<<<<< HEAD
         if self.walk_stack.is_empty():
             while len(path) > 1:
                 dx = path[1][0] - path[0][0]
                 dy = path[1][1] - path[0][1]
                 self.walk_stack.push((dx, dy))
                 path.pop(0)
+=======
+        while len(path) > 1:
+            dx = path[1][0] - path[0][0]
+            dy = path[1][1] - path[0][1]
+            self.walk_stack.push((dx, dy))
+            path.pop(0)
+>>>>>>> origin/main
 
     def come_back(self):
         dx, dy = self.walk_stack.pop()
@@ -319,6 +328,7 @@ class Explorer(AbstAgent):
         method at each cycle. Must be implemented in every agent"""
 
         path, cost = self.a_star_search(self.__get_current_pos(), (0,0))
+<<<<<<< HEAD
         print(f'cost to base: {cost}')
         print(f'cell difficulty: {self.cells_known[self.__get_current_pos()]["difficulty"]}\n')
         if cost < self.get_rtime():
@@ -330,6 +340,14 @@ class Explorer(AbstAgent):
             self.stack_comeback(path)
             self.come_back()
             self.time_to_come_back = True
+=======
+        if cost + 10 < self.get_rtime():
+            self.explore()
+            return True
+        else:
+            self.stack_comeback(path)
+            self.come_back()
+>>>>>>> origin/main
 
         # time to come back to the base
         if self.walk_stack.is_empty() or (self.x == 0 and self.y == 0):
