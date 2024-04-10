@@ -336,7 +336,8 @@ class Explorer(AbstAgent):
 
             # print(f'{self.__get_current_pos()} cell difficulty: {self.cells_known[self.__get_current_pos()]["difficulty"]}')
             # print(f'{self.__get_current_pos()} cost to base: {cost}')
-            if cost < self.get_rtime():
+            error = self.COST_DIAG + self.COST_FIRST_AID + self.COST_READ
+            if cost + error < self.get_rtime():
                 self.explore()
                 return True
             elif self.time_to_come_back == False:
