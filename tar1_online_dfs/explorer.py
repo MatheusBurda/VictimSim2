@@ -207,10 +207,17 @@ class Explorer(AbstAgent):
         dx = current_point[0] - next_point[0]
         dy = current_point[1] - next_point[1]
         
+        try:
+            cost = self.cells_known[next_point]["difficulty"]
+        except KeyError:
+            # the cell is known but not visited, thus dont know the difficulty, assumes 0
+            cost = 0
+            
         if abs(dx) > 0 and abs(dy) > 0:
-            return self.COST_DIAG
+            return cost * self.COST_DIAG
         elif abs(dx) > 0 or abs(dy) > 0:
-            return self.COST_LINE
+            return cost * self.COST_LINE
+        
         return 0
 
 
@@ -278,6 +285,13 @@ class Explorer(AbstAgent):
             #print(f"{self.NAME}:at ({self.x}, {self.y}), diffic: {difficulty:.2f} vict: {seq} rtime: {self.get_rtime()}")
 
         return
+    
+    def stack_comeback(self, path):
+        while len(path) > 1:
+            dx = path[1][0] - path[0][0]
+            dy = path[1][1] - path[0][1]
+            self.walk_stack.push((dx, dy))
+            path.pop(0)
 
     def come_back(self):
         dx, dy = self.walk_stack.pop()
@@ -299,10 +313,13 @@ class Explorer(AbstAgent):
         """ The agent chooses the next action. The simulator calls this
         method at each cycle. Must be implemented in every agent"""
 
-        consumed_time = self.TLIM - self.get_rtime()
-        if consumed_time < self.get_rtime():
+        path, cost = self.a_star_search(self.__get_current_pos(), (0,0))
+        if cost < self.get_rtime():
             self.explore()
             return True
+        else:
+            self.stack_comeback(path)
+            self.come_back()
 
         # time to come back to the base
         if self.walk_stack.is_empty() or (self.x == 0 and self.y == 0):
