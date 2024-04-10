@@ -58,8 +58,9 @@ class Explorer(AbstAgent):
         self.untried_stack = Stack() # a stack to store the untried movements
 
         self.backtracking_stack = Stack()   # a stack to store the backtracking positions to a avaiable node
+        self.time_to_come_back = False
         self.results = []           # a table to store results given results(previous_state, action) = state
-        self.cells_known = {(0,0): {"visited": True, "cost_to_origin" : 0,  "dificulty" : 0}}      # a table to store the visited cells
+        self.cells_known = {(0,0): {"visited": True, "difficulty" : 0}}      # a table to store the visited cells
         self.set_state(VS.ACTIVE)  # explorer is active since the beginning
         self.resc = resc           # reference to the rescuer agent
         self.x = 0                 # current x position relative to the origin 0
@@ -120,7 +121,7 @@ class Explorer(AbstAgent):
             next_position = (current_pos[0] + action[0], current_pos[1] + action[1])
             
             if next_position not in self.cells_known.keys():
-                self.cells_known[next_position] = {"visited": False}
+                self.cells_known[next_position] = {"visited": False, "difficulty" : None}
 
             if self.cells_known[next_position]["visited"] == False and not next_action:
                 next_action = action
@@ -185,7 +186,11 @@ class Explorer(AbstAgent):
             if current == goal:
                 break
 
-            cells_nearby = [pos for pos, _ in self.cells_known.items() if abs(pos[0] - current[0]) <= 1 and abs(pos[1] - current[1]) <= 1]
+            cells_nearby = []
+
+            for pos, key_value in self.cells_known.items():
+                if abs(pos[0] - current[0]) <= 1 and abs(pos[1] - current[1]) <= 1 and (key_value["visited"] == True or pos == goal):
+                    cells_nearby.append(pos)
 
             for next in cells_nearby:
                 new_cost = cost_so_far[current] + self.update_costs(current, next)
@@ -208,17 +213,15 @@ class Explorer(AbstAgent):
         dy = current_point[1] - next_point[1]
         
         try:
-            cost = self.cells_known[next_point]["difficulty"]
+            difficulty = self.cells_known[next_point]["difficulty"]
         except KeyError:
             # the cell is known but not visited, thus dont know the difficulty, assumes 0
-            cost = 0
-            
-        if abs(dx) > 0 and abs(dy) > 0:
-            return cost * self.COST_DIAG
-        elif abs(dx) > 0 or abs(dy) > 0:
-            return cost * self.COST_LINE
-        
-        return 0
+            difficulty = 0
+
+        if dx == 0 or dy == 0:
+            return difficulty * self.COST_LINE
+        else:
+            return difficulty * self.COST_DIAG
 
 
     def explore(self):
@@ -250,29 +253,30 @@ class Explorer(AbstAgent):
             #print(f"{self.NAME}: Wall or grid limit reached at ({self.x + dx}, {self.y + dy})")
 
         if result == VS.EXECUTED:
-
-            self.cells_known[self.__get_current_pos()]["visited"] = True
-
-            print(f'visited {self.__get_current_pos()}: {self.get_rtime()}')
-
             # check for victim returns -1 if there is no victim or the sequential
             # the sequential number of a found victim
             self.walk_stack.push((dx, dy))
 
             # update the agent's position relative to the origin
             self.x += dx
-            self.y += dy          
+            self.y += dy    
+
+            self.cells_known[self.__get_current_pos()]["visited"] = True
+            print(f'visited {self.__get_current_pos()}: {self.get_rtime()}')
 
             # Check for victims
             seq = self.check_for_victim()
-            if seq != VS.NO_VICTIM:
+            has_read_vital = False
+            if seq != VS.NO_VICTIM and (self.__get_current_pos() not in self.victims.keys()):
                 vs = self.read_vital_signals()
-                self.victims[vs[0]] = ((self.x, self.y), vs)
+                has_read_vital = True
+                self.victims[self.__get_current_pos()] = {'signals' : vs}
                 print(f"{self.NAME} Victim found at ({self.x}, {self.y}), rtime: {self.get_rtime()}")
-                #print(f"{self.NAME} Seq: {seq} Vital signals: {vs}")
             
             # Calculates the difficulty of the visited cell
             difficulty = (rtime_bef - rtime_aft)
+            if has_read_vital:
+                difficulty -= self.COST_READ
             if dx == 0 or dy == 0:
                 difficulty = difficulty / self.COST_LINE
             else:
@@ -287,11 +291,12 @@ class Explorer(AbstAgent):
         return
     
     def stack_comeback(self, path):
-        while len(path) > 1:
-            dx = path[1][0] - path[0][0]
-            dy = path[1][1] - path[0][1]
-            self.walk_stack.push((dx, dy))
-            path.pop(0)
+        if self.walk_stack.is_empty():
+            while len(path) > 1:
+                dx = path[1][0] - path[0][0]
+                dy = path[1][1] - path[0][1]
+                self.walk_stack.push((dx, dy))
+                path.pop(0)
 
     def come_back(self):
         dx, dy = self.walk_stack.pop()
@@ -314,12 +319,17 @@ class Explorer(AbstAgent):
         method at each cycle. Must be implemented in every agent"""
 
         path, cost = self.a_star_search(self.__get_current_pos(), (0,0))
+        print(f'cost to base: {cost}')
+        print(f'cell difficulty: {self.cells_known[self.__get_current_pos()]["difficulty"]}\n')
         if cost < self.get_rtime():
             self.explore()
             return True
-        else:
+        elif self.time_to_come_back == False:
+            print(f"{self.NAME}: COMING BACK \n")
+            self.walk_stack = Stack()
             self.stack_comeback(path)
             self.come_back()
+            self.time_to_come_back = True
 
         # time to come back to the base
         if self.walk_stack.is_empty() or (self.x == 0 and self.y == 0):
