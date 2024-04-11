@@ -79,9 +79,9 @@ class Rescuer(AbstAgent):
         # If the captain has received all the maps, cluster them and distribute through the rescuers
         if self.received_maps >= self.n_resc:
 
-            victim_clusters = self.k_means_clustering(self.victims, self.n_resc)    
+            victim_clusters, centroids = self.k_means_clustering(self.victims, self.n_resc)    
 
-            self.save_cluster_metrics(victim_clusters)
+            self.save_cluster_metrics(victim_clusters, centroids)
 
             for i, resc in enumerate(self.rescuers):
                 resc.go_save_victims(self.cells_known, victim_clusters[i + 1])
@@ -125,18 +125,26 @@ class Rescuer(AbstAgent):
 
             centroids = new_centroids
         
-        return clusters
+        return clusters, centroids
     
 
-    def save_cluster_metrics(self, clusters):
+    def save_cluster_metrics(self, clusters, centroids):
         data_folder = self._AbstAgent__env.data_folder
 
         if not os.path.exists(os.path.join(data_folder, 'output')):
             os.mkdir(os.path.join(data_folder, 'output'))
 
+        sse = 0
+        silhuet = 0
+        for i in range(len(centroids)):
+            for j in range(i, len(centroids)):
+                silhuet += (centroids[i][0]-centroids[j][0])**2 + (centroids[i][1]-centroids[j][1])**2
+
         for i, cluster in enumerate(clusters):
             with open(os.path.join(data_folder, 'output', f'cluster{i+1}.txt'), 'w+') as file:
                 for point in cluster: 
+                    sse += (point[0]-centroids[i][0])**2 + (point[1]-centroids[i][1])**2
+
                     victim = self.victims[point]
                     #TODO: Change:
                     grav = 0
@@ -144,6 +152,10 @@ class Rescuer(AbstAgent):
                     #  𝑖𝑑, 𝑥, 𝑦, 0.0, 1 (id é a identificação da vítima, x e y, a posição dela e os dois últimos valores correspondem ao valor da gravidade e ao seu label)
                     file.write(f'{victim["id"]}, {point[0]}, {point[1]}, {grav}, {label}\n')
 
+        with open(os.path.join(data_folder, 'output', f'metrics.txt'), 'w+') as file:
+            file.write(f'SSE: {sse}\n')
+            file.write(f'Silhuet: {silhuet}\n')
+            
 
     def go_save_victims(self, cells_known, victims):
         """ The captain sends the map containing the walls and
