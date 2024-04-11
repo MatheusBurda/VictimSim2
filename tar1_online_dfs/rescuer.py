@@ -6,6 +6,7 @@
 
 
 import os
+import math
 import random
 from map import Map
 from vs.abstract_agent import AbstAgent
@@ -16,7 +17,7 @@ from abc import ABC, abstractmethod
 
 ## Classe que define o Agente Rescuer com um plano fixo
 class Rescuer(AbstAgent):
-    def __init__(self, env, config_file):
+    def __init__(self, env, config_file, captain=None):
         """ 
         @param env: a reference to an instance of the environment class
         @param config_file: the absolute path to the agent's config file"""
@@ -25,7 +26,7 @@ class Rescuer(AbstAgent):
 
         # Specific initialization for the rescuer
         self.map = None             # explorer will pass the map
-        self.victims = None         # list of found victims
+        # self.victims = None         # list of found victims
         self.plan = []              # a list of planned actions
         self.plan_x = 0             # the x position of the rescuer during the planning phase
         self.plan_y = 0             # the y position of the rescuer during the planning phase
@@ -34,34 +35,135 @@ class Rescuer(AbstAgent):
         self.plan_walk_time = 0.0   # previewed time to walk during rescue
         self.x = 0                  # the current x position of the rescuer when executing the plan
         self.y = 0                  # the current y position of the rescuer when executing the plan
-
-                
         # Starts in IDLE state.
         # It changes to ACTIVE when the map arrives
         self.set_state(VS.IDLE)
 
-    
-    def go_save_victims(self, map, victims):
+        # Created atributes:
+        self.captain = captain # Flag to indicate who is the captain to lead the other rescuers to their victims
+        self.cells_known = {}
+        self.victims = {}
+        self.received_maps = 0
+        self.rescuers = []
+        self.n_resc = 1
+
+        if self.captain: #register
+            self.captain.cap_register_resc(self)
+
+
+    def cap_register_resc(self, new_rescuer):
+        self.n_resc += 1
+        if new_rescuer is None:
+            raise Exception('Rescuer is None')
+        self.rescuers.append(new_rescuer)
+        print(f'CAPTAIN: {self.n_resc} rescuers registered')
+
+
+    def cap_receive_map(self, cells_known, victims):
         """ The explorer sends the map containing the walls and
+        victims' location. If all maps were received from explorers
+        then, the victims are clustered and sent to the rescuers to start the rescue"""
+
+        for key in victims.keys():
+            if key not in self.victims.keys():
+                    self.victims[key] = victims[key]
+        
+        for key in cells_known.keys():
+            if key not in self.cells_known.keys():
+                    self.cells_known[key] = cells_known[key]
+
+        self.received_maps += 1
+
+        print(f'Captain: {self.received_maps} maps out of {self.n_resc} received')
+
+        # If the captain has received all the maps, cluster them and distribute through the rescuers
+        if self.received_maps >= self.n_resc:
+
+            victim_clusters = self.k_means_clustering(self.victims, self.n_resc)    
+
+            self.save_cluster_metrics(victim_clusters)
+
+            for i, resc in enumerate(self.rescuers):
+                resc.go_save_victims(self.cells_known, victim_clusters[i + 1])
+            
+            self.go_save_victims(self.cells_known, victim_clusters[0])     
+
+    
+    def k_means_clustering(self, victims, k, max_iterations=100):      
+
+        locations = list(victims.keys())
+        clusters = None
+
+        centroids = random.sample(locations, k)
+
+        for i in range(max_iterations):
+
+            # Cluster Atribution
+            clusters = [[] for _ in centroids]
+            for point in locations:
+                min_distance = float('inf')
+                closest_centroid = None
+                for i, centroid in enumerate(centroids):
+                    dist = math.sqrt((point[0]-centroid[0])**2 + (point[1]-centroid[1])**2)
+                    if dist < min_distance:
+                        min_distance = dist
+                        closest_centroid = i
+                clusters[closest_centroid].append(point)
+
+            # Centroid calculation
+            new_centroids = []
+            for cluster in clusters:
+                if cluster:
+                    x_sum = sum(point[0] for point in cluster)
+                    y_sum = sum(point[1] for point in cluster)
+                    centroid = (x_sum / len(cluster), y_sum / len(cluster))
+                    new_centroids.append(centroid)
+
+            # No change
+            if centroids == new_centroids:
+                break
+
+            centroids = new_centroids
+        
+        return clusters
+    
+
+    def save_cluster_metrics(self, clusters):
+        data_folder = self._AbstAgent__env.data_folder
+
+        if not os.path.exists(os.path.join(data_folder, 'output')):
+            os.mkdir(os.path.join(data_folder, 'output'))
+
+        for i, cluster in enumerate(clusters):
+            with open(os.path.join(data_folder, 'output', f'cluster{i+1}.txt'), 'w+') as file:
+                for point in cluster: 
+                    victim = self.victims[point]
+                    #TODO: Change:
+                    grav = 0
+                    label = 1
+                    #  𝑖𝑑, 𝑥, 𝑦, 0.0, 1 (id é a identificação da vítima, x e y, a posição dela e os dois últimos valores correspondem ao valor da gravidade e ao seu label)
+                    file.write(f'{victim["id"]}, {point[0]}, {point[1]}, {grav}, {label}\n')
+
+
+    def go_save_victims(self, cells_known, victims):
+        """ The captain sends the map containing the walls and
         victims' location. The rescuer becomes ACTIVE. From now,
         the deliberate method is called by the environment"""
 
+        self.cells_known = cells_known
+
         print(f"\n\n*** R E S C U E R ***")
-        self.map = map
-        print(f"{self.NAME} Map received from the explorer")
-        self.map.draw()
+        # self.map = cells_known.keys()
+        print(f"{self.NAME} Map received from the captain")
+        # self.map.draw()
+
+        self.set_state(VS.ACTIVE)
+
+        return
 
         print()
         #print(f"{self.NAME} List of found victims received from the explorer")
         self.victims = victims
-
-        # print the found victims - you may comment out
-        #for seq, data in self.victims.items():
-        #    coord, vital_signals = data
-        #    x, y = coord
-        #    print(f"{self.NAME} Victim seq number: {seq} at ({x}, {y}) vs: {vital_signals}")
-
-        #print(f"{self.NAME} time limit to rescue {self.plan_rtime}")
 
         self.__planner()
         print(f"{self.NAME} PLAN")
@@ -75,9 +177,10 @@ class Rescuer(AbstAgent):
             i += 1
 
         print(f"{self.NAME} END OF PLAN")
-                  
+                    
         self.set_state(VS.ACTIVE)
-        
+
+
     def __depth_search(self, actions_res):
         enough_time = True
         ##print(f"\n{self.NAME} actions results: {actions_res}")

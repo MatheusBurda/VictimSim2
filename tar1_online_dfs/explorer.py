@@ -14,6 +14,7 @@ from vs.constants import VS
 from map import Map
 import heapq
 
+DEBUG = False
 
 class PriorityQueue:
     def __init__(self):
@@ -45,7 +46,7 @@ class Stack:
 
 
 class Explorer(AbstAgent):
-    def __init__(self, env, config_file, resc, direction=0):
+    def __init__(self, env, config_file, resc=None, direction=0, resc_captain=None):
         """ Construtor do agente random on-line
         @param env: a reference to the environment 
         @param config_file: the absolute path to the explorer's config file
@@ -54,13 +55,11 @@ class Explorer(AbstAgent):
 
         super().__init__(env, config_file)
         self.walk_stack = Stack()  # a stack to store the movements
-        #TODO: is it used?
         self.untried_stack = Stack() # a stack to store the untried movements
 
         self.backtracking_stack = Stack()   # a stack to store the backtracking positions to a avaiable node
         self.time_to_come_back = False
         self.results = []           # a table to store results given results(previous_state, action) = state
-        self.cells_known = {(0,0): {"visited": True, "difficulty" : 1}}      # a table to store the visited cells
         self.set_state(VS.ACTIVE)  # explorer is active since the beginning
         self.resc = resc           # reference to the rescuer agent
         self.x = 0                 # current x position relative to the origin 0
@@ -68,12 +67,14 @@ class Explorer(AbstAgent):
         self.map = Map()           # create a map for representing the environment
         self.victims = {}          # a dictionary of found victims: (seq): ((x,y), [<vs>])
                                    # the key is the seq number of the victim,(x,y) the position, <vs> the list of vital signals
-
-        self.preferred_direction = direction
-
         # put the current position - the base - in the map
         self.map.add((self.x, self.y), 1, VS.NO_VICTIM, self.check_walls_and_lim())
-
+        
+        # Added Atributes
+        self.preferred_direction = direction
+        self.cells_known = {(0,0): {"visited": True, "difficulty" : 1}}      # a table to store the visited cells
+        self.resc_captain = resc_captain
+        
 
     def get_next_position(self):
         """ Randomically, gets the next position that can be explored (no wall and inside the grid)
@@ -265,7 +266,6 @@ class Explorer(AbstAgent):
         if result == VS.BUMPED:
             # update the map with the wall
             self.map.add((self.x + dx, self.y + dy), VS.OBST_WALL, VS.NO_VICTIM, self.check_walls_and_lim())
-            #print(f"{self.NAME}: Wall or grid limit reached at ({self.x + dx}, {self.y + dy})")
 
         if result == VS.EXECUTED:
             # check for victim returns -1 if there is no victim or the sequential
@@ -277,7 +277,6 @@ class Explorer(AbstAgent):
             self.y += dy    
 
             self.cells_known[self.__get_current_pos()]["visited"] = True
-            print(f'visited {self.__get_current_pos()}: {self.get_rtime()}')
 
             # Check for victims
             seq = self.check_for_victim()
@@ -287,7 +286,6 @@ class Explorer(AbstAgent):
                 # has_read_vital = True
                 self.victims[self.__get_current_pos()] = {'id': seq, 'signals' : vs}
                 print(f"{self.NAME} Victim found at ({self.x}, {self.y}), rtime: {self.get_rtime()}")
-            
             
             # Calculates the difficulty of the visited cell
             difficulty = (rtime_bef - rtime_aft)
@@ -300,7 +298,6 @@ class Explorer(AbstAgent):
 
             # Update the map with the new cell
             self.map.add((self.x, self.y), difficulty, seq, self.check_walls_and_lim())
-            #print(f"{self.NAME}:at ({self.x}, {self.y}), diffic: {difficulty:.2f} vict: {seq} rtime: {self.get_rtime()}")
 
         return
     
@@ -330,7 +327,6 @@ class Explorer(AbstAgent):
             # update the agent's position relative to the origin
             self.x += dx
             self.y += dy
-            print(f"{self.NAME}: coming back at ({self.x}, {self.y}), rtime: {self.get_rtime()}")
         
 
     def deliberate(self) -> bool:
@@ -343,8 +339,6 @@ class Explorer(AbstAgent):
         else:
             path, cost = self.a_star_search(self.__get_current_pos(), (0,0))
 
-            # print(f'{self.__get_current_pos()} cell difficulty: {self.cells_known[self.__get_current_pos()]["difficulty"]}')
-            # print(f'{self.__get_current_pos()} cost to base: {cost}')
             error = self.COST_DIAG + self.COST_FIRST_AID + self.COST_READ
             if cost + error < self.get_rtime():
                 self.explore()
@@ -356,13 +350,11 @@ class Explorer(AbstAgent):
 
         # time to come back to the base
         if self.walk_stack.is_empty() or (self.x == 0 and self.y == 0):
-            # time to wake up the rescuer
-            # pass the walls and the victims (here, they're empty)
-            print(f"{self.NAME}: rtime {self.get_rtime()}, invoking the rescuer")
-            #input(f"{self.NAME}: type [ENTER] to proceed")
-            self.resc.go_save_victims(self.map, self.victims)
+
+            print(f"{self.NAME}: rtime {self.get_rtime()}, sending map")
+
+            self.resc_captain.cap_receive_map(self.cells_known, self.victims)
             return False
 
-        # self.come_back()
         return True
 
