@@ -70,9 +70,11 @@ class Explorer(AbstAgent):
         # put the current position - the base - in the map
         self.map.add((self.x, self.y), 1, VS.NO_VICTIM, self.check_walls_and_lim())
         
+        self.current_max_cost_to_base = 0
+
         # Added Atributes
         self.preferred_direction = direction
-        self.cells_known = {(0,0): {"visited": True, "difficulty" : 1}}      # a table to store the visited cells
+        self.cells_known = {(0,0): {"visited": True, "difficulty" : 1, "cost_to_base": 0}}      # a table to store the visited cells
         self.resc_captain = resc_captain
         
 
@@ -160,13 +162,26 @@ class Explorer(AbstAgent):
 
         min_cost = None
         best_path = None
-        for goal in possible_goals:
-            path, cost = self.a_star_search(self.__get_current_pos(), goal)
-            if path == [] or cost == -1:
-                pass
-            elif min_cost is None or cost < min_cost:
-                min_cost = cost
-                best_path = path
+
+        index = 0
+        loc_range = 10 if len(possible_goals) > 10 else len(possible_goals)
+
+        possible_goals = possible_goals[::-1]
+
+        while not best_path and len(possible_goals) >= index + loc_range:
+
+            for goal in possible_goals[index:index+loc_range]:
+                path, cost = self.a_star_search(self.__get_current_pos(), goal)
+                if path == [] or cost == -1:
+                    pass
+                elif min_cost is None or cost < min_cost:
+                    min_cost = cost
+                    best_path = path
+
+            index += loc_range
+            if loc_range + index > len(possible_goals):
+                loc_range = len(possible_goals) - index 
+
 
         if not best_path:
             return
@@ -340,6 +355,7 @@ class Explorer(AbstAgent):
             path, cost = self.a_star_search(self.__get_current_pos(), (0,0))
 
             error = self.COST_DIAG + self.COST_FIRST_AID + self.COST_READ
+
             if cost + error < self.get_rtime():
                 self.explore()
                 return True
