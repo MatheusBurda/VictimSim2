@@ -67,10 +67,11 @@ class Explorer(AbstAgent):
         self.map = Map()           # create a map for representing the environment
         self.victims = {}          # a dictionary of found victims: (seq): ((x,y), [<vs>])
                                    # the key is the seq number of the victim,(x,y) the position, <vs> the list of vital signals
+             
         # put the current position - the base - in the map
         self.map.add((self.x, self.y), 1, VS.NO_VICTIM, self.check_walls_and_lim())
         
-        self.current_max_cost_to_base = 0
+        self.current_min_cost_to_base = 0
 
         # Added Atributes
         self.preferred_direction = direction
@@ -132,7 +133,7 @@ class Explorer(AbstAgent):
             next_position = (current_pos[0] + action[0], current_pos[1] + action[1])
             
             if next_position not in self.cells_known.keys():
-                self.cells_known[next_position] = {"visited": False, "difficulty" : None}
+                self.cells_known[next_position] = {"visited": False, "difficulty" : None, "cost_to_base": None}
 
             if self.cells_known[next_position]["visited"] == False and not next_action:
                 next_action = action
@@ -255,6 +256,37 @@ class Explorer(AbstAgent):
         return path, cost_so_far[goal]
 
 
+    def min_cost_to_base(self):
+
+        current_pos = self.__get_current_pos()
+
+        min_cost = self.cells_known[current_pos]["cost_to_base"]
+
+        coordinates = [
+            (-1, -1),   # x - 1, y - 1
+            (-1,  0),   # x - 1, y + 0
+            (-1,  1),   # x - 1, y + 1
+            (0 , -1),   # x + 0, y - 1
+            (0 ,  0),   # x + 0, y + 0
+            (0 ,  1),   # x + 0, y + 1
+            (1 , -1),   # x + 1, y - 1
+            (1 ,  0),   # x + 1, y + 0
+            (1 ,  1)    # x + 1, y + 1
+        ]
+
+        keys = self.cells_known.keys()
+
+        for coord in coordinates:
+            pos = tuple(map(sum, zip(current_pos, coord)))
+            if pos in keys:
+                cost = self.cells_known[pos]["cost_to_base"]
+
+                if (cost is not None) and (min_cost is None or cost < min_cost):
+                    min_cost = cost
+
+        return min_cost
+
+
     def explore(self):
 
         if not self.backtracking_stack.is_empty():
@@ -310,7 +342,8 @@ class Explorer(AbstAgent):
                 difficulty = difficulty / self.COST_DIAG
             
             self.cells_known[self.__get_current_pos()]["difficulty"] = difficulty
-
+            self.cells_known[self.__get_current_pos()]["cost_to_base"] = self.min_cost_to_base() + self.cells_known[self.__get_current_pos()]["difficulty"]
+            
             # Update the map with the new cell
             self.map.add((self.x, self.y), difficulty, seq, self.check_walls_and_lim())
 
@@ -352,15 +385,19 @@ class Explorer(AbstAgent):
             self.come_back()
 
         else:
-            path, cost = self.a_star_search(self.__get_current_pos(), (0,0))
+            cost = self.cells_known[self.__get_current_pos()]["cost_to_base"]
 
             error = self.COST_DIAG + self.COST_FIRST_AID + self.COST_READ
 
             if cost + error < self.get_rtime():
                 self.explore()
                 return True
+            
             elif self.time_to_come_back == False:
                 print(f"{self.NAME}: RETURNING TO BASE ##########")
+
+                # Searches for a path to the base
+                path, cost = self.a_star_search(self.__get_current_pos(), (0,0))
                 self.stack_comeback(path)
                 self.time_to_come_back = True
 
