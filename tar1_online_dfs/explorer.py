@@ -131,7 +131,7 @@ class Explorer(AbstAgent):
         for action in possible_actions:
 
             next_position = (current_pos[0] + action[0], current_pos[1] + action[1])
-            
+
             if next_position not in self.cells_known.keys():
                 self.cells_known[next_position] = {"visited": False, "difficulty" : None, "cost_to_base": None}
 
@@ -160,28 +160,27 @@ class Explorer(AbstAgent):
         for pos in visited_locations:
             if len(self.get_adjacents_unvisited(pos)) > 0:
                 possible_goals.append(pos)
+        
+        # Get the nearest goal from current position using euclidean distance
+        curr_pos = self.__get_current_pos()
+        for p_goal in possible_goals:
+            p_goal_dist = math.sqrt((p_goal[0] - curr_pos[0])**2 + (p_goal[1] - curr_pos[1])**2)
+            if not "goal" in locals() or p_goal_dist < goal_dist:
+                goal = p_goal
+                goal_dist = p_goal_dist
+        
+        best_path, min_cost = self.a_star_search(curr_pos, goal)
 
-        min_cost = None
-        best_path = None
+        # min_cost = None
+        # best_path = None
 
-        index = 0
-        loc_range = 10 if len(possible_goals) > 10 else len(possible_goals)
-
-        possible_goals = possible_goals[::-1]
-
-        while not best_path and len(possible_goals) >= index + loc_range:
-
-            for goal in possible_goals[index:index+loc_range]:
-                path, cost = self.a_star_search(self.__get_current_pos(), goal)
-                if path == [] or cost == -1:
-                    pass
-                elif min_cost is None or cost < min_cost:
-                    min_cost = cost
-                    best_path = path
-
-            index += loc_range
-            if loc_range + index > len(possible_goals):
-                loc_range = len(possible_goals) - index 
+        # for goal in possible_goals:
+        #     path, cost = self.a_star_search(self.__get_current_pos(), goal)
+        #     if path == [] or cost == -1:
+        #         pass
+        #     elif min_cost is None or cost < min_cost:
+        #         min_cost = cost
+        #         best_path = path
 
 
         if not best_path:
