@@ -187,14 +187,11 @@ class Explorer(AbstAgent):
             return
         
         last_step = best_path[-1]
-        print(self.__get_current_pos())
-        print(best_path)
         for step in reversed(best_path[:-1]):
             delta_step = (step[0]-last_step[0], step[1]-last_step[1])
             self.backtracking_stack.push(delta_step)
             last_step = step
         self.backtracking_stack.items.reverse()
-        print(self.backtracking_stack.items)
 
 
     def update_costs(self, current_point, next_point):
@@ -294,7 +291,6 @@ class Explorer(AbstAgent):
         
         if not self.backtracking_stack.is_empty():
             dx, dy = self.backtracking_stack.pop()
-            print(f'going from {self.x, self.y} to {self.x + dx, self.y + dy}')
         else:
             dx, dy = self.online_dfs()
 
@@ -309,7 +305,6 @@ class Explorer(AbstAgent):
 
         # Moves the body to another position
         rtime_bef = self.get_rtime()
-        print(f'moving from {self.x, self.y} to {self.x + dx, self.y + dy}')
         result = self.walk(dx, dy)
         rtime_aft = self.get_rtime()
 
@@ -392,7 +387,7 @@ class Explorer(AbstAgent):
         else:
             cost = self.cells_known[self.__get_current_pos()]["cost_to_base"]
 
-            error = self.COST_DIAG + self.COST_FIRST_AID + self.COST_READ + 10
+            error = self.COST_DIAG + self.COST_FIRST_AID + self.COST_READ + 20
 
             if cost + error < self.get_rtime():
                 self.explore()
