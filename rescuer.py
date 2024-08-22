@@ -74,10 +74,12 @@ class Rescuer(AbstAgent):
 
         self.received_maps += 1
 
-        print(f'Captain: {self.received_maps} maps out of {self.n_resc} received')
+        print(f'Rescuer captain: {self.received_maps} maps out of {self.n_resc} received')
 
         # If the captain has received all the maps, cluster them and distribute through the rescuers
         if self.received_maps >= self.n_resc:
+
+            # Alterar para estimar a gravidade de cada vitima ()
 
             victim_clusters, centroids = self.k_means_clustering(self.victims, self.n_resc)    
 
@@ -146,7 +148,7 @@ class Rescuer(AbstAgent):
                     sse += (point[0]-centroids[i][0])**2 + (point[1]-centroids[i][1])**2
 
                     victim = self.victims[point]
-                    #TODO: Change:
+                    # TODO: Change:
                     grav = 0
                     label = 1
                     #  𝑖𝑑, 𝑥, 𝑦, 0.0, 1 (id é a identificação da vítima, x e y, a posição dela e os dois últimos valores correspondem ao valor da gravidade e ao seu label)
@@ -192,76 +194,6 @@ class Rescuer(AbstAgent):
                     
         self.set_state(VS.ACTIVE)
 
-
-    def __depth_search(self, actions_res):
-        enough_time = True
-        ##print(f"\n{self.NAME} actions results: {actions_res}")
-        for i, ar in enumerate(actions_res):
-
-            if ar != VS.CLEAR:
-                ##print(f"{self.NAME} {i} not clear")
-                continue
-
-            # planning the walk
-            dx, dy = Rescuer.AC_INCR[i]  # get the increments for the possible action
-            target_xy = (self.plan_x + dx, self.plan_y + dy)
-
-            # checks if the explorer has not visited the target position
-            if not self.map.in_map(target_xy):
-                ##print(f"{self.NAME} target position not explored: {target_xy}")
-                continue
-
-            # checks if the target position is already planned to be visited 
-            if (target_xy in self.plan_visited):
-                ##print(f"{self.NAME} target position already visited: {target_xy}")
-                continue
-
-            # Now, the rescuer can plan to walk to the target position
-            self.plan_x += dx
-            self.plan_y += dy
-            difficulty, vic_seq, next_actions_res = self.map.get((self.plan_x, self.plan_y))
-            #print(f"{self.NAME}: planning to go to ({self.plan_x}, {self.plan_y})")
-
-            if dx == 0 or dy == 0:
-                step_cost = self.COST_LINE * difficulty
-            else:
-                step_cost = self.COST_DIAG * difficulty
-
-            #print(f"{self.NAME}: difficulty {difficulty}, step cost {step_cost}")
-            #print(f"{self.NAME}: accumulated walk time {self.plan_walk_time}, rtime {self.plan_rtime}")
-
-            # check if there is enough remaining time to walk back to the base
-            if self.plan_walk_time + step_cost > self.plan_rtime:
-                enough_time = False
-                #print(f"{self.NAME}: no enough time to go to ({self.plan_x}, {self.plan_y})")
-            
-            if enough_time:
-                # the rescuer has time to go to the next position: update walk time and remaining time
-                self.plan_walk_time += step_cost
-                self.plan_rtime -= step_cost
-                self.plan_visited.add((self.plan_x, self.plan_y))
-
-                if vic_seq == VS.NO_VICTIM:
-                    self.plan.append((dx, dy, False)) # walk only
-                    #print(f"{self.NAME}: added to the plan, walk to ({self.plan_x}, {self.plan_y}, False)")
-
-                if vic_seq != VS.NO_VICTIM:
-                    # checks if there is enough remaining time to rescue the victim and come back to the base
-                    if self.plan_rtime - self.COST_FIRST_AID < self.plan_walk_time:
-                        print(f"{self.NAME}: no enough time to rescue the victim")
-                        enough_time = False
-                    else:
-                        self.plan.append((dx, dy, True))
-                        #print(f"{self.NAME}:added to the plan, walk to and rescue victim({self.plan_x}, {self.plan_y}, True)")
-                        self.plan_rtime -= self.COST_FIRST_AID
-
-            # let's see what the agent can do in the next position
-            if enough_time:
-                self.__depth_search(self.map.get((self.plan_x, self.plan_y))[2]) # actions results
-            else:
-                return
-
-        return
     
     def __planner(self):
         """ A private method that calculates the walk actions in a OFF-LINE MANNER to rescue the
