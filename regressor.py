@@ -34,7 +34,7 @@ def test_model(model, test_data_filename):
     x_test = df_test[['qPA', 'pulso', 'freqResp']]
     y_test = df_test['gravidade']
 
-    print('Predicting...')
+    print(f'Predicting...')
     y_pred = model.predict(x_test)
 
     # Avaliando o modelo
@@ -42,6 +42,15 @@ def test_model(model, test_data_filename):
     r2 = r2_score(y_test, y_pred)
 
     print(f'Results:\nMSE: {mse}\nr2: {r2}')
+
+
+def predict(model, data: pd.DataFrame):
+
+    # assert data.columns == ['qPA', 'pulso', 'freqResp'], 'Data frame incorret with the module'
+
+    y_pred = model.predict(data)
+
+    return list(y_pred)
 
 
 def save_model(model, save_model_filename='gradient_boosting_model.pkl'):
@@ -54,11 +63,10 @@ def load_model(filename):
     return model
 
 
-
 if __name__ == "__main__":
-    model = train_model(train_data_filename='datasets/data_4000v/env_vital_signals.txt')
+    # model = train_model(train_data_filename='datasets/data_4000v/env_vital_signals.txt')
 
-    save_model(model, save_model_filename='gradient_boosting_model.pkl')
+    # save_model(model, save_model_filename='gradient_boosting_model.pkl')
     
     model = load_model('gradient_boosting_model.pkl')
 

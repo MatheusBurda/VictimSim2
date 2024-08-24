@@ -14,6 +14,8 @@ from vs.physical_agent import PhysAgent
 from vs.constants import VS
 from abc import ABC, abstractmethod
 
+import regressor
+import pandas as pd
 
 ## Classe que define o Agente Rescuer com um plano fixo
 class Rescuer(AbstAgent):
@@ -81,6 +83,8 @@ class Rescuer(AbstAgent):
 
             # Alterar para estimar a gravidade de cada vitima ()
 
+            self.predict_gravity()
+
             victim_clusters, centroids = self.k_means_clustering(self.victims, self.n_resc)    
 
             self.save_cluster_metrics(victim_clusters, centroids)
@@ -90,7 +94,27 @@ class Rescuer(AbstAgent):
             
             self.go_save_victims(self.cells_known, victim_clusters[0])     
 
-    
+
+    def predict_gravity(self, model_filename='gradient_boosting_model.pkl'):
+        
+        model = regressor.load_model(model_filename)
+        
+        # victims[] -> (x, y): {'id': id, 'signals': [index, pSist, pDiast, qPA, pulso, freqResp]}
+        victims_signals = [victim["signals"][-3:] for _, victim in self.victims.items()]
+
+        data_frame = pd.DataFrame(victims_signals)
+        data_frame.columns = [['qPA', 'pulso', 'freqResp']]
+
+        grav = regressor.predict(model, data_frame)
+
+        for i, key in enumerate(self.victims.keys()):
+            assert victims_signals[i] == self.victims[key]["signals"][-3:], 'Wrong victim'
+
+            self.victims[key]["grav"] = grav[i]
+            
+            print(f'victm {key} -> {victims_signals[i]} = {grav[i]}')
+
+
     def k_means_clustering(self, victims, k, max_iterations=100):      
 
         locations = list(victims.keys())
