@@ -1,4 +1,4 @@
-##  RESCUER AGENT
+    ##  RESCUER AGENT
 ### @Author: Tacla (UTFPR)
 ### Demo of use of VictimSim
 ### Not a complete version of DFS; it comes back prematuraly
@@ -13,6 +13,7 @@ from vs.abstract_agent import AbstAgent
 from vs.physical_agent import PhysAgent
 from vs.constants import VS
 from abc import ABC, abstractmethod
+from genetic_algorithm import GeneticAlgorithm
 
 import regressor
 import pandas as pd
@@ -189,31 +190,15 @@ class Rescuer(AbstAgent):
         the deliberate method is called by the environment"""
 
         self.cells_known = cells_known
+        self.victims = victims 
 
         print(f"\n\n*** R E S C U E R ***")
         # self.map = cells_known.keys()
         print(f"{self.NAME} Map received from the captain")
         # self.map.draw()
 
-        self.set_state(VS.ACTIVE)
-
-        return
-
-        print()
-        #print(f"{self.NAME} List of found victims received from the explorer")
-        self.victims = victims
-
-        self.__planner()
         print(f"{self.NAME} PLAN")
-        i = 1
-        self.plan_x = 0
-        self.plan_y = 0
-        for a in self.plan:
-            self.plan_x += a[0]
-            self.plan_y += a[1]
-            print(f"{self.NAME} {i}) dxy=({a[0]}, {a[1]}) vic: a[2] => at({self.plan_x}, {self.plan_y})")
-            i += 1
-
+        self.__planner()
         print(f"{self.NAME} END OF PLAN")
                     
         self.set_state(VS.ACTIVE)
@@ -233,11 +218,11 @@ class Rescuer(AbstAgent):
         # Besides, it has a flag indicating that a first-aid kit must be delivered when the move is completed.
         # For instance (0,1,True) means the agent walk to (x+0,y+1) and after walking, it leaves the kit.
 
-        self.plan_visited.add((0,0)) # always start from the base, so it is already visited
-        difficulty, vic_seq, actions_res = self.map.get((0,0))
-        self.__depth_search(actions_res)
+        best_sequence_victims = GeneticAlgorithm(self.cells_known, self.victims).run()
 
-        # push actions into the plan to come back to the base
+        # TODO - Calculates the path based on A* algorithm
+
+        # Push actions into the plan to come back to the base
         if self.plan == []:
             return
 
@@ -287,4 +272,5 @@ class Rescuer(AbstAgent):
         #input(f"{self.NAME} remaining time: {self.get_rtime()} Tecle enter")
 
         return True
+
 
