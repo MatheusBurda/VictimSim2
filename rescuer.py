@@ -111,9 +111,7 @@ class Rescuer(AbstAgent):
         for i, key in enumerate(self.victims.keys()):
             assert victims_signals[i] == self.victims[key]["signals"][-3:], 'Wrong victim'
 
-            self.victims[key]["grav"] = grav[i]
-            
-            print(f'victm {key} -> {victims_signals[i]} = {grav[i]}')
+            self.victims[key]["grav"] = grav[i]            
 
 
     def k_means_clustering(self, victims, k, max_iterations=100):      
@@ -174,7 +172,7 @@ class Rescuer(AbstAgent):
 
                     victim = self.victims[point]
                     # TODO: Change:
-                    grav = 0
+                    grav = victim['grav']
                     label = 1
                     #  𝑖𝑑, 𝑥, 𝑦, 0.0, 1 (id é a identificação da vítima, x e y, a posição dela e os dois últimos valores correspondem ao valor da gravidade e ao seu label)
                     file.write(f'{victim["id"]}, {point[0]}, {point[1]}, {grav}, {label}\n')
