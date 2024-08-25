@@ -92,7 +92,9 @@ class GeneticAlgorithm:
             
             population = new_population
             
-            print(f"Geração {generation}, Melhor Indivíduo: {population[0]}, Aptidão: {self.fitness(population[0])}")   
+            # print(f"Geração {generation}, Melhor Indivíduo: {population[0]}, Aptidão: {self.fitness(population[0])}")   
+
+        return population[0]   
 
 if __name__ == "__main__":
 

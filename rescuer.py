@@ -14,9 +14,23 @@ from vs.physical_agent import PhysAgent
 from vs.constants import VS
 from abc import ABC, abstractmethod
 from genetic_algorithm import GeneticAlgorithm
+import heapq
 
 import regressor
 import pandas as pd
+
+class PriorityQueue:
+    def __init__(self):
+        self.elements = []
+    
+    def empty(self) -> bool:
+        return not self.elements
+    
+    def put(self, item, priority: float):
+        heapq.heappush(self.elements, (priority, item))
+    
+    def get(self):
+        return heapq.heappop(self.elements)[1]
 
 ## Classe que define o Agente Rescuer com um plano fixo
 class Rescuer(AbstAgent):
@@ -201,6 +215,68 @@ class Rescuer(AbstAgent):
                     
         self.set_state(VS.ACTIVE)
 
+    def update_costs(self, current_point, next_point):
+        dx = current_point[0] - next_point[0]
+        dy = current_point[1] - next_point[1]
+        
+        difficulty = self.cells_known[next_point]["difficulty"]
+        if difficulty == None:
+            difficulty = 1.0
+
+        if dx == 0 or dy == 0:
+            return difficulty * self.COST_LINE
+        else:
+            return difficulty * self.COST_DIAG
+
+    def a_star_search(self, start, goal):
+
+        def heuristic(a, b):
+            (x1, y1) = a
+            (x2, y2) = b
+            return abs(x1 - x2) + abs(y1 - y2)
+
+        def reconstruct_path(came_from, start, goal):
+            current = goal
+            path = []
+            while current != start:
+                path.append(current)
+                current = came_from[current]
+            path.append(start) 
+            return path
+
+        frontier = PriorityQueue()
+        frontier.put(start, 0)
+        came_from = {}
+        cost_so_far = {}
+        came_from[start] = None
+        cost_so_far[start] = 0
+        
+        while not frontier.empty():
+            current = frontier.get()
+            
+            if current == goal:
+                break
+
+            cells_nearby = []
+            for pos, key_value in self.cells_known.items():
+                if abs(pos[0] - current[0]) <= 1 and abs(pos[1] - current[1]) <= 1 and (key_value["visited"] == True or pos == goal):
+                    cells_nearby.append(pos)
+
+            for next in cells_nearby:
+                new_cost = cost_so_far[current] + self.update_costs(current, next)
+                if next not in cost_so_far.keys() or new_cost < cost_so_far[next]:
+                    cost_so_far[next] = new_cost
+                    priority = new_cost + heuristic(next, goal)
+                    frontier.put(next, priority)
+                    came_from[next] = current
+
+        if goal not in came_from:
+            return [], -1
+
+        path = reconstruct_path(came_from, start, goal)
+
+        return path, cost_so_far[goal]
+
     
     def __planner(self):
         """ A private method that calculates the walk actions in a OFF-LINE MANNER to rescue the
@@ -219,18 +295,41 @@ class Rescuer(AbstAgent):
         best_sequence_victims = GeneticAlgorithm(self.cells_known, self.victims).run()
 
         # TODO - Calculates the path based on A* algorithm
+        start = (0, 0)
+        path = []
+        total_cost = 0
+        for victim in best_sequence_victims:
+            goal = victim
+            new_path, cost = self.a_star_search(start, goal)
+            if new_path == []:
+                print(f'Path not found from {start} to {goal}')
+                continue
+            path = new_path[:-1]+path
+            total_cost += cost
+            start = goal
+
+        goal = (0,0)
+        new_path, cost = self.a_star_search(start, goal)
+        if new_path == []:
+            print(f'Path not found from {start} to {goal}')
+        path = new_path[:-1]+path
+        total_cost += cost
+
+        self.plan = path
+
+        # Para cada coordenada do path, verificar se tem vitima e adicionar a ação de resgate
+        for i, point in enumerate(self.plan):
+            if point in self.victims:
+                self.plan[i] = (point[0], point[1], True)
+            else:
+                self.plan[i] = (point[0], point[1], False)
+
+        # Transformando o caminho em dx e dy para o agente andar
+        self.plan = [(path[i+1][0] - path[i][0], path[i+1][1] - path[i][1], path[i+1][2]) for i in range(len(path)-1)]
 
         # Push actions into the plan to come back to the base
         if self.plan == []:
             return
-
-        come_back_plan = []
-
-        for a in reversed(self.plan):
-            # triple: dx, dy, no victim - when coming back do not rescue any victim
-            come_back_plan.append((a[0]*-1, a[1]*-1, False))
-
-        self.plan = self.plan + come_back_plan
         
         
     def deliberate(self) -> bool:
@@ -239,12 +338,12 @@ class Rescuer(AbstAgent):
         Must be implemented in every agent
         @return True: there's one or more actions to do
         @return False: there's no more action to do """
-
+        
         # No more actions to do
         if self.plan == []:  # empty list, no more actions to do
            #input(f"{self.NAME} has finished the plan [ENTER]")
            return False
-
+    
         # Takes the first action of the plan (walk action) and removes it from the plan
         dx, dy, there_is_vict = self.plan.pop(0)
         #print(f"{self.NAME} pop dx: {dx} dy: {dy} vict: {there_is_vict}")
@@ -263,9 +362,9 @@ class Rescuer(AbstAgent):
                 if rescued:
                     print(f"{self.NAME} Victim rescued at ({self.x}, {self.y})")
                 else:
-                    print(f"{self.NAME} Plan fail - victim not found at ({self.x}, {self.x})")
+                    print(f"{self.NAME} Plan fail - victim not found at ({self.x}, {self.y})")
         else:
-            print(f"{self.NAME} Plan fail - walk error - agent at ({self.x}, {self.x})")
+            print(f"{self.NAME} Plan fail - walk error - agent at ({self.x}, {self.y})")
             
         #input(f"{self.NAME} remaining time: {self.get_rtime()} Tecle enter")
 
