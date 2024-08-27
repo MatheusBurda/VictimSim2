@@ -3,8 +3,8 @@ import string
 
 TARGET = 100
 POPULATION_SIZE = 100
-MUTATION_RATE = 0.01
-GENERATIONS = 10
+MUTATION_RATE = 0.1
+GENERATIONS = 20
 
 class GeneticAlgorithm:
 
@@ -23,28 +23,24 @@ class GeneticAlgorithm:
         Calculates the fitness based on Manhattan distance and Gravity
         TODO : Implement a logic that takes in account the gravity of the victims
         """
-        total_distance = 0
-        for index, _ in enumerate(individual):
-            if index == len(individual) - 1:
-                break
-            x1, y1 = individual[index]
-            x2, y2 = individual[index + 1]
-            distance = abs(x1 - x2) + abs(y1 - y2)
-            if distance == 0:
-                contains_zero = True
-                break
-            total_distance += distance
         
-        # If one of the distance is 0, the crossover generated a bad individual, so the fitness receives 0
-        if "contains_zero" in locals() and contains_zero == True :
-            fitness = 0
-        else:
-            # Fitness is inversely proportional to distance
-            if total_distance == 0:
-                fitness = 100
-            else:
+        # Verify if the individual has all the victims
+        contain_all_vic = set(individual) == set(self.victims)
+        if contain_all_vic == True:
+        
+            total_distance = 0
+            for index, _ in enumerate(individual):
+                if index == len(individual) - 1:
+                    break
+                x1, y1 = individual[index]
+                x2, y2 = individual[index + 1]
+                total_distance += abs(x1 - x2) + abs(y1 - y2)
+                # Fitness is inversely proportional to distance
                 fitness = 1 / total_distance * 100
-        
+        else:
+            # If the individual does not contain all the victims, attribute a bad fitness
+            fitness = 0
+
         # print(f"Individual: {individual}, Fitness: {fitness}")
 
         return fitness
@@ -92,15 +88,26 @@ class GeneticAlgorithm:
             
             population = new_population
             
-            # print(f"Geração {generation}, Melhor Indivíduo: {population[0]}, Aptidão: {self.fitness(population[0])}")   
+            print(f"Geração {generation}, Melhor Indivíduo: {population[0]}, Aptidão: {self.fitness(population[0])}")   
 
         return population[0]   
 
 if __name__ == "__main__":
 
-    # list of tuples with the coordinates of the victims
-    cluster = [(1, 2), (3, 4), (5, 6), (7, 8), (9, 10), (11, 12), (13, 14), (15, 16), (17, 18), (19, 20)]
-    victims = [(1, 2), (7, 8), (5, 6), (3, 4)]
+    grid_size = 20
+    num_victims = 20
 
+    # Generates a sample grid
+    cluster = [(x, y) for x in range(grid_size) for y in range(grid_size)]
+
+    # Randomly generate 100 victims
+    victims = set()
+    while len(victims) < num_victims:
+        point = random.randint(0, grid_size - 1), random.randint(0, grid_size - 1)
+        victims.add(point)
+
+    # transform set into list
+    victims = list(victims)
+    
     genetic_algorithm = GeneticAlgorithm(cluster=cluster, victims=victims)
     genetic_algorithm.run()
