@@ -110,7 +110,7 @@ class Rescuer(AbstAgent):
             self.go_save_victims(self.cells_known, self.victims, victim_clusters[0])     
 
 
-    def predict_gravity(self, model_filename='gradient_boosting_model.pkl'):
+    def predict_gravity(self, model_filename='neural_network_model.pkl'):
         
         model = regressor.load_model(model_filename)
         
@@ -125,7 +125,7 @@ class Rescuer(AbstAgent):
         for i, key in enumerate(self.victims.keys()):
             assert victims_signals[i] == self.victims[key]["signals"][-3:], 'Wrong victim'
 
-            self.victims[key]["grav"] = grav[i]            
+            self.victims[key]["grav"] = grav[i][0]            
 
 
     def k_means_clustering(self, victims, k, max_iterations=100):      
@@ -221,8 +221,7 @@ class Rescuer(AbstAgent):
         dy = current_point[1] - next_point[1]
         
         difficulty = self.cells_known[next_point]["difficulty"]
-        if difficulty == None:
-            difficulty = 1.0
+        difficulty = 1 if difficulty == None else difficulty
 
         if dx == 0 or dy == 0:
             return difficulty * self.COST_LINE
