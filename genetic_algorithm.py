@@ -3,57 +3,88 @@ import string
 
 TARGET = 100
 POPULATION_SIZE = 100
-MUTATION_RATE = 0.2
+MUTATION_RATE = 0.4
+CROSSOVER_RATE = 1
 GENERATIONS = 1000
-STOP_INALTERABILITY_COND = 250
+STOP_INALTERABILITY_COND = 50
 
 class GeneticAlgorithm:
 
-    def __init__(self, cluster, victims) -> None:
-        self.cluster = cluster
+    def __init__(self, victims, victims_list) -> None:
         self.victims = victims
+        self.victims_list = victims_list
         self.distances = []
 
+
     def create_individual(self):
-        victims_copy = self.victims.copy()
+        victims_copy = self.victims_list.copy()
         random.shuffle(victims_copy)
         return victims_copy
+
 
     def fitness(self, individual):
         """
         Calculates the fitness based on Manhattan distance and Gravity
         TODO : Implement a logic that takes in account the gravity of the victims
         """
-        
-        # Verify if the individual has all the victims
-        contain_all_vic = set(individual) == set(self.victims)
-        if contain_all_vic == True:
-        
-            total_distance = 0
-            for index, _ in enumerate(individual):
-                if index == len(individual) - 1:
-                    break
-                x1, y1 = individual[index]
-                x2, y2 = individual[index + 1]
-                total_distance += abs(x1 - x2) + abs(y1 - y2)
-                # Fitness is inversely proportional to distance
-                fitness = 1 / total_distance * 100
-        else:
-            # If the individual does not contain all the victims, attribute a bad fitness
-            fitness = 0
 
-        # print(f"Individual: {individual}, Fitness: {fitness}")
+        # Has repeated individuals
+        if len(individual) != len(set(individual)):
+            print('Individuo bugado: ')
+            return 0
+              
+        total_distance = 0
+        total_grav = self.victims[individual[0]]["grav"]
+
+        for index, _ in enumerate(individual):
+            if index == len(individual) - 1:
+                break
+
+            x1, y1 = individual[index]
+            x2, y2 = individual[index + 1]
+            total_distance += abs(x1 - x2) + abs(y1 - y2)
+
+            # The bigger the gravity of the individual first on the list
+            total_grav += self.victims[individual[index + 1]]["grav"] / (index + 2)
+
+        # Fitness is inversely proportional to distance
+        fitness = 1 / total_distance * 100 + total_grav
 
         return fitness
+
 
     def select_parent(self, population):
         weights = [self.fitness(individual) for individual in population]
         return random.choices(population, weights=weights, k=1)[0]
 
+
     def crossover(self, parent1, parent2):
-        point = random.randint(0, len(parent1) - 1)
-        child = parent1[:point] + parent2[point:]
-        return child
+
+        if random.random() < CROSSOVER_RATE:
+            point = random.randint(0, len(parent1) - 1)
+            child = parent1[:point] + parent2[point:]
+            
+            # checking for missing values and make them random
+            child_set = set(child)
+            missing = [victim for victim in self.victims_list if victim not in child_set] 
+            random.shuffle(missing)
+
+            # fill child with the missing values
+            victims_set = set()
+            for index, victim in enumerate(child):
+                if victim in victims_set:
+                    child[index] = missing.pop()
+
+                victims_set.add(child[index])
+
+            return child
+        
+        # Crossover dont occurs, return a random parent
+        if not not random.getrandbits(1):
+            return parent1 
+        else:
+            return parent2
+
 
     def mutate(self, individual):
         individual = list(individual)
@@ -64,6 +95,7 @@ class GeneticAlgorithm:
                 individual[gene_1_idx], individual[gene_2_idx] = individual[gene_2_idx], individual[gene_1_idx]
 
         return individual
+
 
     def run(self):
         population = [self.create_individual() for _ in range(POPULATION_SIZE)]
@@ -91,9 +123,9 @@ class GeneticAlgorithm:
             else:
                 times_stucked = 0
             
+            # Select the best ones from current pop to continue on next generation
             new_population = population[:2]
             
-            # Creates new population based on the parents, crossover and mutation
             while len(new_population) < POPULATION_SIZE:
                 parent1 = self.select_parent(population)
                 parent2 = self.select_parent(population)
@@ -104,17 +136,19 @@ class GeneticAlgorithm:
             population = new_population
             best_individual = population[0]
             
-            print(f"Geração {generation}, Melhor Indivíduo: {best_individual}, Aptidão: {self.fitness(best_individual)}")   
+            print(f"gen: {generation} -> fitness: {self.fitness(best_individual)}")   
+            # print(f"Geração {generation}, Melhor Indivíduo: {best_individual}, Aptidão: {self.fitness(best_individual)}")   
 
         return best_individual  
+
 
 if __name__ == "__main__":
 
     grid_size = 50
     num_victims = 30
 
-    # Generates a sample grid
-    cluster = [(x, y) for x in range(grid_size) for y in range(grid_size)]
+    # # Generates a sample grid
+    # cluster = [(x, y) for x in range(grid_size) for y in range(grid_size)]
 
     # Randomly generate 100 victims
     victims = set()
@@ -125,7 +159,7 @@ if __name__ == "__main__":
     # transform set into list
     victims = list(victims)
     
-    genetic_algorithm = GeneticAlgorithm(cluster=cluster, victims=victims)
+    genetic_algorithm = GeneticAlgorithm(victims=victims)
     best = genetic_algorithm.run()
 
     # compute the euclidean distance between the victims

@@ -105,9 +105,9 @@ class Rescuer(AbstAgent):
             self.save_cluster_metrics(victim_clusters, centroids)
 
             for i, resc in enumerate(self.rescuers):
-                resc.go_save_victims(self.cells_known, victim_clusters[i + 1])
+                resc.go_save_victims(self.cells_known, self.victims, victim_clusters[i + 1])
             
-            self.go_save_victims(self.cells_known, victim_clusters[0])     
+            self.go_save_victims(self.cells_known, self.victims, victim_clusters[0])     
 
 
     def predict_gravity(self, model_filename='gradient_boosting_model.pkl'):
@@ -196,13 +196,14 @@ class Rescuer(AbstAgent):
             file.write(f'Silhuet: {silhuet}\n')
             
 
-    def go_save_victims(self, cells_known, victims):
+    def go_save_victims(self, cells_known, victims, victims_list):
         """ The captain sends the map containing the walls and
         victims' location. The rescuer becomes ACTIVE. From now,
         the deliberate method is called by the environment"""
 
         self.cells_known = cells_known
-        self.victims = victims 
+        self.victims = victims
+        self.victims_list = victims_list
 
         print(f"\n\n*** R E S C U E R ***")
         # self.map = cells_known.keys()
@@ -210,7 +211,7 @@ class Rescuer(AbstAgent):
         # self.map.draw()
 
         print(f"{self.NAME} PLAN")
-        self.__planner()
+        self.__planner(victims_list)
         print(f"{self.NAME} END OF PLAN")
                     
         self.set_state(VS.ACTIVE)
@@ -278,7 +279,7 @@ class Rescuer(AbstAgent):
         return path, cost_so_far[goal]
 
     
-    def __planner(self):
+    def __planner(self, victims_list):
         """ A private method that calculates the walk actions in a OFF-LINE MANNER to rescue the
         victims. Further actions may be necessary and should be added in the
         deliberata method"""
@@ -292,7 +293,7 @@ class Rescuer(AbstAgent):
         # Besides, it has a flag indicating that a first-aid kit must be delivered when the move is completed.
         # For instance (0,1,True) means the agent walk to (x+0,y+1) and after walking, it leaves the kit.
 
-        best_sequence_victims = GeneticAlgorithm(self.cells_known, self.victims).run()
+        best_sequence_victims = GeneticAlgorithm(self.victims, victims_list).run()
 
         # TODO - Calculates the path based on A* algorithm
         start = (0, 0)
@@ -319,7 +320,7 @@ class Rescuer(AbstAgent):
 
         # Para cada coordenada do path, verificar se tem vitima e adicionar a ação de resgate
         for i, point in enumerate(self.plan):
-            if point in self.victims:
+            if point in victims_list:
                 self.plan[i] = (point[0], point[1], True)
             else:
                 self.plan[i] = (point[0], point[1], False)
