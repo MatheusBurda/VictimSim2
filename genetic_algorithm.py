@@ -4,7 +4,7 @@ from tqdm import tqdm
 
 import matplotlib.pyplot as plt
 
-DEBUG = True  # set as false to remove plots
+DEBUG = False  # set as false to remove plots
 
 GENERATIONS = 1000
 POPULATION_SIZE = 100

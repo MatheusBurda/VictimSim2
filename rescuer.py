@@ -65,6 +65,10 @@ class Rescuer(AbstAgent):
         self.rescuers = []
         self.n_resc = 1
 
+        self.time_to_come_back = False
+        self.best_sequence_victims = []
+        self.cost_next_goal = []
+
         if self.captain: #register
             self.captain.cap_register_resc(self)
 
@@ -170,8 +174,8 @@ class Rescuer(AbstAgent):
 
         for vic_pos in tqdm(self.victims.keys(), desc='Calculating the cost to base from all victims'):
             path, cost = self.a_star_search(vic_pos, (0,0))
-            self.cells_known[key]["cost_to_base"] = cost
-            self.cells_known[key]["path_to_base"] = path
+            self.cells_known[vic_pos]["cost_to_base"] = cost
+            self.cells_known[vic_pos]["path_to_base"] = path
 
 
 
@@ -356,29 +360,31 @@ class Rescuer(AbstAgent):
         # Besides, it has a flag indicating that a first-aid kit must be delivered when the move is completed.
         # For instance (0,1,True) means the agent walk to (x+0,y+1) and after walking, it leaves the kit.
 
-        best_sequence_victims = GeneticAlgorithm(self.victims, victims_list).run()
+        self.best_sequence_victims = GeneticAlgorithm(self.victims, victims_list).run()
 
         # TODO - Calculates the path based on A* algorithm
         start = (0, 0)
-        path = []
+        path = [start]
         total_cost = 0
-        for victim in best_sequence_victims:
+        for victim in self.best_sequence_victims:
             goal = victim
             new_path, cost = self.a_star_search(start, goal)
             if new_path == []:
                 print(f'Path not found from {start} to {goal}')
                 continue
+            self.cost_next_goal.append(cost)
             path = new_path[:-1]+path
             total_cost += cost
             start = goal
 
         goal = (0,0)
         new_path, cost = self.a_star_search(start, goal)
+        self.cost_next_goal.append(cost)
         if new_path == []:
             print(f'Path not found from {start} to {goal}')
         path = new_path[:-1]+path
         total_cost += cost
-
+        
         self.plan = path
 
         # Para cada coordenada do path, verificar se tem vitima e adicionar a ação de resgate
@@ -393,6 +399,7 @@ class Rescuer(AbstAgent):
 
         # Push actions into the plan to come back to the base
         if self.plan == []:
+            # Fills the plan with the actions to come back to the base
             return
         
         
@@ -402,15 +409,45 @@ class Rescuer(AbstAgent):
         Must be implemented in every agent
         @return True: there's one or more actions to do
         @return False: there's no more action to do """
-        
-        # No more actions to do
-        if self.plan == []:  # empty list, no more actions to do
-           #input(f"{self.NAME} has finished the plan [ENTER]")
-           return False
+
+        if self.time_to_come_back == False:
+            # Verify if is time to come back to the base
+            atual_position = (self.x, self.y)
+            if atual_position in self.best_sequence_victims:
+
+                atual_victim = atual_position
+                current_cost_base = self.cells_known[atual_victim]["cost_to_base"]
+
+                next_vic_idx = self.best_sequence_victims.index(atual_victim) + 1
+                if next_vic_idx < len(self.best_sequence_victims):
+                    next_vic = self.best_sequence_victims[next_vic_idx]
+                    cost_next_victim_base = self.cells_known[next_vic]["cost_to_base"]
+
+                    atual_vic_idx = self.best_sequence_victims.index(atual_victim)
+                    cost_next_victim = self.cost_next_goal[atual_vic_idx]
+                
+                else:
+                    cost_next_victim = 0
+                    cost_next_victim_base = 0
+
+                battery = self.get_rtime()
+                if (cost_next_victim + cost_next_victim_base > battery):
+
+                    print("*** TIME TO COME BACK ***")
+                    
+                    self.time_to_come_back = True 
+
+                    breakpoint()
+                    # Fills the plan with the actions to come back to the base
+                    path, cost = self.a_star_search(atual_position, (0,0))
+
+                    # Transformando o caminho em dx e dy para o agente andar
+                    self.plan = [(path[i+1][0] - path[i][0], path[i+1][1] - path[i][1], False) for i in range(len(path)-1)]
+
+
     
         # Takes the first action of the plan (walk action) and removes it from the plan
         dx, dy, there_is_vict = self.plan.pop(0)
-        #print(f"{self.NAME} pop dx: {dx} dy: {dy} vict: {there_is_vict}")
 
         # Walk - just one step per deliberation
         walked = self.walk(dx, dy)
@@ -429,8 +466,12 @@ class Rescuer(AbstAgent):
                     print(f"{self.NAME} Plan fail - victim not found at ({self.x}, {self.y})")
         else:
             print(f"{self.NAME} Plan fail - walk error - agent at ({self.x}, {self.y})")
+            breakpoint()
+        
+        # No more actions to do
+        if self.plan == []:
+            return False
             
-        #input(f"{self.NAME} remaining time: {self.get_rtime()} Tecle enter")
 
         return True
 
