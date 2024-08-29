@@ -364,7 +364,7 @@ class Rescuer(AbstAgent):
 
         # TODO - Calculates the path based on A* algorithm
         start = (0, 0)
-        path = []
+        path = [start]
         total_cost = 0
         for victim in self.best_sequence_victims:
             goal = victim
@@ -385,7 +385,6 @@ class Rescuer(AbstAgent):
         path = new_path[:-1]+path
         total_cost += cost
         
-        breakpoint()
         self.plan = path
 
         # Para cada coordenada do path, verificar se tem vitima e adicionar a ação de resgate
@@ -395,9 +394,9 @@ class Rescuer(AbstAgent):
             else:
                 self.plan[i] = (point[0], point[1], False)
 
-        breakpoint()
         # Transformando o caminho em dx e dy para o agente andar
         self.plan = [(path[i+1][0] - path[i][0], path[i+1][1] - path[i][1], path[i+1][2]) for i in range(len(path)-1)]
+
         # Push actions into the plan to come back to the base
         if self.plan == []:
             # Fills the plan with the actions to come back to the base
