@@ -15,6 +15,7 @@ from vs.constants import VS
 from abc import ABC, abstractmethod
 from genetic_algorithm import GeneticAlgorithm
 import heapq
+from tqdm import tqdm
 
 import regressor
 import pandas as pd
@@ -135,28 +136,28 @@ class Rescuer(AbstAgent):
 
     def update_joined_maps_cost(self):
 
-        def get_adjacents(position):
-            adjacents = []
-            for pos in self.cells_known.keys():
-                if abs(pos[0] - position[0]) <= 1 and abs(pos[1] - position[1]) <= 1:
-                    adjacents.append(pos)
+        # def get_adjacents(position):
+        #     adjacents = []
+        #     for pos in self.cells_known.keys():
+        #         if abs(pos[0] - position[0]) <= 1 and abs(pos[1] - position[1]) <= 1:
+        #             adjacents.append(pos)
 
-            return adjacents
+        #     return adjacents
         
-        def flood_fill(current_pos, current_cost):
+        # def flood_fill(current_pos, current_cost):
 
-            if self.cells_known[current_pos]['cost_to_base'] is None or current_cost < self.cells_known[current_pos]['cost_to_base']:
-                self.cells_known[current_pos]['cost_to_base'] = current_cost
-            else: 
-                current_cost = self.cells_known[current_pos]['cost_to_base']
+        #     if self.cells_known[current_pos]['cost_to_base'] is None or current_cost < self.cells_known[current_pos]['cost_to_base']:
+        #         self.cells_known[current_pos]['cost_to_base'] = current_cost
+        #     else: 
+        #         current_cost = self.cells_known[current_pos]['cost_to_base']
             
-            adjacents = get_adjacents(current_pos)
+        #     adjacents = get_adjacents(current_pos)
             
-            for next_pos in adjacents:
-                step_cost = self.update_costs(current_pos, next_pos)
-                next_cost = self.cells_known[next_pos]['cost_to_base']
-                if (next_cost is None) or (next_cost > current_cost + step_cost):
-                    flood_fill(next_pos, current_cost + step_cost)
+        #     for next_pos in adjacents:
+        #         step_cost = self.update_costs(current_pos, next_pos)
+        #         next_cost = self.cells_known[next_pos]['cost_to_base']
+        #         if (next_cost is None) or (next_cost > current_cost + step_cost):
+        #             flood_fill(next_pos, current_cost + step_cost)
 
 
         for key in self.cells_known.keys():
@@ -165,7 +166,13 @@ class Rescuer(AbstAgent):
         # cost to base is 0
         self.cells_known[(0,0)]["cost_to_base"] = 0
 
-        flood_fill((0,0), 0)
+        # flood_fill((0,0), 0)
+
+        for vic_pos in tqdm(self.victims.keys(), desc='Calculating the cost to base from all victims'):
+            path, cost = self.a_star_search(vic_pos, (0,0))
+            self.cells_known[key]["cost_to_base"] = cost
+            self.cells_known[key]["path_to_base"] = path
+
 
 
     def predict_gravity(self, model_filename='gradient_boosting_model.pkl'):

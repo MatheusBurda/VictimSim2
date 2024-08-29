@@ -3,6 +3,7 @@ import sys
 sys.path.append(os.path.join(os.path.dirname(__file__), ".."))
 import time
 
+
 ## importa classes
 from vs.environment import Env
 from explorer import Explorer
@@ -50,9 +51,9 @@ if __name__ == '__main__':
         data_folder_name = sys.argv[1]
     else:
         # data_folder_name = os.path.join("datasets", "data_10v_12x12")
-        # data_folder_name = os.path.join("datasets", "data_42v_20x20")
+        data_folder_name = os.path.join("datasets", "data_42v_20x20")
         # data_folder_name = os.path.join("datasets", "data_132v_100x80")
         # data_folder_name = os.path.join("datasets", "data_225v_100x80")
-        data_folder_name = os.path.join("datasets", "data_300v_90x90")
+        # data_folder_name = os.path.join("datasets", "data_300v_90x90")
         
     main(data_folder_name)
