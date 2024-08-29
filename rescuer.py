@@ -93,7 +93,7 @@ class Rescuer(AbstAgent):
 
         self.received_maps += 1
 
-        print(f'Rescuer captain: {self.received_maps} maps out of {self.n_resc} received')
+        print(f'\nRescuer captain: {self.received_maps} maps out of {self.n_resc} received')
 
         # If the captain has received all the maps, cluster them and distribute through the rescuers
         if self.received_maps >= self.n_resc:
@@ -159,6 +159,7 @@ class Rescuer(AbstAgent):
         #         if (next_cost is None) or (next_cost > current_cost + step_cost):
         #             flood_fill(next_pos, current_cost + step_cost)
 
+        print('\nJoining maps and recalculating...')
 
         for key in self.cells_known.keys():
             self.cells_known[key]["cost_to_base"] = None
@@ -170,8 +171,10 @@ class Rescuer(AbstAgent):
 
         for vic_pos in tqdm(self.victims.keys(), desc='Calculating the cost to base from all victims'):
             path, cost = self.a_star_search(vic_pos, (0,0))
-            self.cells_known[key]["cost_to_base"] = cost
-            self.cells_known[key]["path_to_base"] = path
+            self.cells_known[vic_pos]["cost_to_base"] = cost
+            self.cells_known[vic_pos]["path_to_base"] = path
+        
+        print('Finished\n')
 
 
 
@@ -356,7 +359,8 @@ class Rescuer(AbstAgent):
         # Besides, it has a flag indicating that a first-aid kit must be delivered when the move is completed.
         # For instance (0,1,True) means the agent walk to (x+0,y+1) and after walking, it leaves the kit.
 
-        best_sequence_victims = GeneticAlgorithm(self.victims, victims_list).run()
+        ga_inst = GeneticAlgorithm(self.victims, victims_list, self.cells_known, self.get_rtime(), self.COST_DIAG, self.COST_LINE)
+        best_sequence_victims = ga_inst.run()
 
         # TODO - Calculates the path based on A* algorithm
         start = (0, 0)

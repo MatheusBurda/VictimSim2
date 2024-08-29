@@ -4,35 +4,65 @@ from tqdm import tqdm
 
 import matplotlib.pyplot as plt
 
+from vs.abstract_agent import PriorityQueue
+
 DEBUG = True  # set as false to remove plots
 
 GENERATIONS = 1000
-POPULATION_SIZE = 100
+POPULATION_SIZE = 30
 
-MUTATION_RATE = 0.1
-CROSSOVER_RATE = 0.8
+MUTATION_RATE = 0.6
 
-FITNESS_DISTANCE_WEIGHT = 1 # [1, inf[
-FITNESS_GRAVITY_WEIGHT = 1 # [0, inf[
+FITNESS_DISTANCE_WEIGHT = 5 # [1, inf[
+FITNESS_GRAVITY_WEIGHT = 20 # [0, inf[
+FITNESS_BAD_SOLUTION_MULTIPLIER = 2
 
 STOP_INALTERABILITY_COUNT = 50
-MIN_IMPROVEMENT_REQUIRED = 0.01
+MIN_IMPROVEMENT_REQUIRED = 0.001
 TARGET = 100000
 
-class GeneticAlgorithm:
+class GeneticAlgorithm():
 
-    def __init__(self, victims, victims_list) -> None:
+    def __init__(self, victims, victims_list, cells_known, total_bat, COST_DIAG, COST_LINE) -> None:
+
+        self.COST_DIAG = COST_DIAG
+        self.COST_LINE = COST_LINE
+
         self.victims = victims
         self.victims_list = victims_list
         self.distances = []
         self.sum_grav = sum([victims[vic]["grav"] for vic in victims_list])
         self.max_grav = max([victims[vic]["grav"] for vic in victims_list])
+        self.cells_known = cells_known
+        self.cells_known_list = cells_known.keys()
+        self.total_bat = total_bat
+        self.paths = {} # key (x0, y0, xf, yf) (from): {"path": path, "cost": cost}
 
+        for victim_coord in victims_list:
+            dict_key_from_to = (0, 0, victim_coord[0], victim_coord[1])
+            dict_key_to_from = (victim_coord[0], victim_coord[1], 0, 0)
 
+            path = self.cells_known[victim_coord]["path_to_base"]
+            cost = self.cells_known[victim_coord]["cost_to_base"]
+
+            self.paths[dict_key_from_to] = {"path": path, "cost": cost}
+            self.paths[dict_key_to_from] = {"path": path[::-1], "cost": cost}
+
+        
     def create_individual(self):
         victims_copy = self.victims_list.copy()
         random.shuffle(victims_copy)
-        return victims_copy
+
+        victims = [(0,0)] + victims_copy + [(0,0)]
+
+        individual = {
+            "victims": victims,
+            "fitness": 0,
+            "fitness_norm": 0,
+            "path": []
+        }
+
+        return individual
 
 
     def fitness(self, individual):
@@ -40,76 +70,155 @@ class GeneticAlgorithm:
         Calculates the fitness based on Manhattan distance and Gravity
         """
 
-        # Has repeated individuals
-        if len(individual) != len(set(individual)):
-            print('Individuo bugado: ')
-            return 0
-              
-        total_distance = 1
-        total_grav = self.victims[individual[0]]["grav"]
+        victims_list = individual["victims"]
 
-        for index, _ in enumerate(individual):
-            if index == len(individual) - 1:
+        total_distance = 0
+        total_grav = 0
+        battery_left = self.total_bat
+        individual["fitness"] = 0
+        individual["path"] = [] 
+        saved_all_victims = True
+
+        # Has repeated individuals
+        # if len(victims_list) != len(set(victims_list)) - 1:
+        #     print('Doesnt contain all victims:')
+        #     print(victims_list)
+        #     print(set(victims_list))
+        #     return
+
+        # print(f'{len(victims_list)} : {victims_list}')
+        for index, _ in enumerate(victims_list):
+            if index == len(victims_list) - 1:
                 break
 
-            x1, y1 = individual[index]
-            x2, y2 = individual[index + 1]
-            total_distance += abs(x1 - x2) + abs(y1 - y2)
+            origin_coord = victims_list[index]
+            goal_coord = victims_list[index + 1]
 
-            # The bigger the gravity of the individual first on the list
-            total_grav += self.victims[individual[index + 1]]["grav"] / (index + 2)
+            dict_key_from_to = (origin_coord[0], origin_coord[1], goal_coord[0], goal_coord[1])
+
+            # print(f'from -> to : {dict_key_from_to}')
+
+            if dict_key_from_to not in self.paths.keys():
+                path, cost = self.a_star_search(start=origin_coord, goal=goal_coord, cells_dict=self.cells_known)
+
+                if path == [] and cost == -1:
+                    # Path not found, impossible solution, unfitted solution
+                    individual["fitness"] = 0
+                    print('Path not found, impossible solution, unfitted solution')
+                    return
+
+                self.paths[dict_key_from_to] = {"path": path, "cost": cost}
+
+                dict_key_to_from = (goal_coord[0], goal_coord[1], origin_coord[0], origin_coord[1])
+                self.paths[dict_key_to_from] = {"path": path[::-1], "cost": cost}
+
+            # Checks if the rescuer has battery to do the action and go back to the base with battery
+            if goal_coord != (0,0) and (self.paths[dict_key_from_to]["cost"] + self.paths[(goal_coord[0], goal_coord[1], 0, 0)]["cost"] < battery_left):
+            
+                if len(individual["path"]) > 0 and individual["path"][-1] == self.paths[dict_key_from_to]["path"][0]:
+                    individual["path"] += self.paths[dict_key_from_to]["path"][1:]
+                else:
+                    individual["path"] += self.paths[dict_key_from_to]["path"]
+                
+                battery_left -= self.paths[dict_key_from_to]["cost"]
+
+                total_distance += self.paths[dict_key_from_to]["cost"]
+                # The bigger the gravity of the individual first on the list
+                total_grav += self.victims[victims_list[index + 1]]["grav"] / (index + 2)**2
+            else: 
+                individual["path"] += self.paths[(origin_coord[0], origin_coord[1], 0, 0)]["path"]
+                total_distance += self.paths[(origin_coord[0], origin_coord[1], 0, 0)]["cost"]
+                
+                if goal_coord != (0,0): # Check if it was not going to the base
+                    saved_all_victims = False
+
+                break
+
+        if total_distance == 0:
+            print(individual)
 
         # Fitness is inversely proportional to distance
         fitness = (FITNESS_DISTANCE_WEIGHT * 1000 / total_distance) + (FITNESS_GRAVITY_WEIGHT * 100 * total_grav / self.sum_grav)
 
-        # print(f'fitness = {FITNESS_DISTANCE_WEIGHT * 1000 / total_distance} + {FITNESS_GRAVITY_WEIGHT * 100 * total_grav / self.sum_grav} = {fitness}')
+        if not saved_all_victims:
+            remaining_victims = [self.victims[ idx ]["grav"] for idx in victims_list if (idx != (0,0) and idx not in individual["path"] and self.victims[ idx ]["grav"] > 60)]
+            remaining_victims_grav = sum(remaining_victims)
+            
+            if len(remaining_victims) > 0:
+                fitness -= FITNESS_BAD_SOLUTION_MULTIPLIER * remaining_victims_grav / len(remaining_victims)
 
-        return fitness
+        if fitness < 0:
+            fitness = 0
+
+        individual["fitness"] = fitness
+
+        return
 
 
-    def normalize_fitness(self, fitness_list):
+    def normalize_fitness(self, population):
+        fitness_list = [ind["fitness"] for ind in population]
+
         sum_fit = sum(fitness_list)
-
-        for i in range(len(fitness_list)):
-            fitness_list[i] /= sum_fit
-
-        return fitness_list
-
-
-    def select_parents(self, weights, population):
+        max_fit = max(fitness_list)
         
+        if max_fit < 1:
+            for idv in population:
+                print(idv)
+
+        for i in range(len(population)):
+            population[i]["fitness_norm"] = population[i]["fitness"] / max_fit
+
+        return population
+
+
+    def select_parents(self, population):
+        
+        weights = [ind["fitness_norm"] for ind in population]
+
         selected = random.choices(population, weights=weights, k=2)
 
         return selected
 
 
-    def crossover(self, parent1, parent2):
+    def crossover(self, indv1, indv2):
 
-        if random.random() < CROSSOVER_RATE:
-            point = random.randint(1, len(parent1) - 1)
-            child = parent1[:point] + parent2[point:]
-            
-            # checking for missing values and make them random
-            child_set = set(child)
-            missing = [victim for victim in self.victims_list if victim not in child_set] 
-            random.shuffle(missing)
+        parent1 = indv1["victims"]
+        parent2 = indv2["victims"]
 
-            # fill child with the missing values
-            victims_set = set()
-            for index, victim in enumerate(child):
-                if victim in victims_set:
-                    child[index] = missing.pop()
-
-                victims_set.add(child[index])
-
-            return child
+        point = random.randint(2, len(parent1) - 2)
+        child = parent1[1:point] + parent2[point:-1]
         
-        # Crossover dont occurs, choose a random parent
-        if not not random.getrandbits(1):
-            return parent1 
-        else:
-            return parent2
+        # checking for missing values and make them random
+        child_set = set(child)
+        missing = [victim for victim in self.victims_list if victim not in child_set] 
+        random.shuffle(missing)
 
+        # fill child with the missing values
+        victims_set = set()
+        for index, victim in enumerate(child):
+            if victim in victims_set and victim != (0,0):
+                child[index] = missing.pop()
+
+            victims_set.add(child[index])
+
+        child_mutated = self.mutate(child)
+
+        # if child_mutated[1] == (0,0):
+        #     print(f'\nchild: {child}')
+        #     print(f'child_mutated: {child_mutated}')
+        #     print(f'point: {point}')
+        #     print(f'parent1: {parent1}')
+        #     print(f'parent2: {parent2}\n')
+
+        child_dict = {
+            "victims": [(0,0)] + child_mutated + [(0,0)],
+            "fitness": 0,
+            "fitness_norm": 0,
+            "path": []
+        }
+
+        return child_dict
+        
 
     def mutate(self, individual):
         num_random_integers = 2 * int(len(individual) * MUTATION_RATE)
@@ -131,7 +240,6 @@ class GeneticAlgorithm:
         print(f'MAX number of generations: {GENERATIONS}')
         print(f'population size: {POPULATION_SIZE}')
         print(f'mutation rate: {MUTATION_RATE}')
-        print(f'crossover rate: {CROSSOVER_RATE}')
         print(f'distance weight on fitness: {FITNESS_DISTANCE_WEIGHT}')
         print(f'gravity weight on fitness: {FITNESS_GRAVITY_WEIGHT}')
         print(f'gravity sum: {self.sum_grav}')
@@ -140,7 +248,6 @@ class GeneticAlgorithm:
         population = [self.create_individual() for _ in range(POPULATION_SIZE)]
 
         best_individual = population[0]
-        best_individual_fitness = 0
         times_stucked = 0
         
         min_values = []
@@ -151,9 +258,12 @@ class GeneticAlgorithm:
         for generation in tqdm(range(GENERATIONS)):
 
             # Sorts the population by fitness
-            population_fitness = [self.fitness(ind) for ind in population]
-
-            population_fitness = self.normalize_fitness(population_fitness)
+            population_fitness = []
+            for indv in population:
+                self.fitness(indv)
+                population_fitness.append(indv["fitness"])
+            
+            population = self.normalize_fitness(population)
 
             curr_min = min(population_fitness)
             curr_avg = sum(population_fitness) / len(population_fitness)
@@ -163,42 +273,41 @@ class GeneticAlgorithm:
             new_best_individual = population[index_max]
            
             # Stop conditions
-            if best_individual_fitness >= TARGET:
+            if best_individual["fitness"] >= TARGET:
                 print(f"Target genratin finded {generation}: {best_individual}")
                 break
             # Add a stop condition if the fitness get stucked from a number of generations
-            elif abs(best_individual_fitness - population_fitness[index_max]) < MIN_IMPROVEMENT_REQUIRED:
-                times_stucked += 1
-                if times_stucked >= STOP_INALTERABILITY_COUNT:
-                    print(f"Population stucked at generation {generation}")
-                    break
+            # elif abs(best_individual["fitness"] - population_fitness[index_max]) < MIN_IMPROVEMENT_REQUIRED:
+            #     times_stucked += 1
+            #     if times_stucked >= STOP_INALTERABILITY_COUNT:
+            #         print(f"Population stucked at generation {generation}")
+            #         break
             else:
                 times_stucked = 0
 
-            if population_fitness[index_max] > best_individual_fitness:
+            if population_fitness[index_max] > best_individual["fitness"]:
                 best_individual = new_best_individual
-                best_individual_fitness = population_fitness[index_max]
+                best_individual["fitness"] = population_fitness[index_max]
 
             if DEBUG:
                 min_values.append(curr_min)
                 avg_values.append(curr_avg)
                 max_values.append(curr_max)
-                best_values.append(best_individual_fitness)
+                best_values.append(best_individual["fitness"])
             
             # Select the best one from current pop and the best overall to continue on next generation
-            new_population = [self.mutate(population[index_max])]
-            new_population.append(self.mutate(best_individual))
+            new_population = [population[index_max]]
+            # new_population.append(self.mutate(best_individual))
 
             while len(new_population) < POPULATION_SIZE:
-                parent1, parent2 = self.select_parents(weights=population_fitness, population=population)
+                parent1, parent2 = self.select_parents(population)
                 child = self.crossover(parent1, parent2)
-                child = self.mutate(child)
+                # child = self.mutate(child)
                 new_population.append(child)
             
             population = new_population
             
             # print(f"gen: {generation} -> fitness: {self.fitness(best_individual)}")   
-            # print(f"Geração {generation}, Melhor Indivíduo: {best_individual}, Aptidão: {self.fitness(best_individual)}")   
 
         if DEBUG:
             plt.figure()
@@ -218,34 +327,70 @@ class GeneticAlgorithm:
 
         return best_individual  
 
+    def update_costs(self, current_point, next_point, cells_dict=None):
+        dx = current_point[0] - next_point[0]
+        dy = current_point[1] - next_point[1]
+        
+        if not cells_dict:
+            cells_dict = self.cells_known
+        
+        difficulty = cells_dict[next_point]["difficulty"]
 
-if __name__ == "__main__":
+        if dx == 0 or dy == 0:
+            return difficulty * self.COST_LINE
+        else:
+            return difficulty * self.COST_DIAG
 
-    grid_size = 50
-    num_victims = 30
+    def a_star_search(self, start, goal, cells_dict=None):
 
-    # # Generates a sample grid
-    # cluster = [(x, y) for x in range(grid_size) for y in range(grid_size)]
+        def heuristic(a, b):
+            (x1, y1) = a
+            (x2, y2) = b
+            return abs(x1 - x2) + abs(y1 - y2)
 
-    # Randomly generate 100 victims
-    victims = set()
-    while len(victims) < num_victims:
-        point = random.randint(0, grid_size - 1), random.randint(0, grid_size - 1)
-        victims.add(point)
+        def reconstruct_path(came_from, start, goal):
+            current = goal
+            path = []
+            while current != start:
+                path.append(current)
+                current = came_from[current]
+            path.append(start) 
+            return path
+        
+        if not cells_dict:
+            cells_dict = self.cells_known
 
-    # transform set into list
-    victims = list(victims)
-    
-    genetic_algorithm = GeneticAlgorithm(victims=victims)
-    best = genetic_algorithm.run()
+        assert type(cells_dict) == dict, 'cells_dict invalid or self.cells_known is not a dict'
 
-    # compute the euclidean distance between the victims
-    total_distance = 0
-    for index, _ in enumerate(best):
-        if index == len(best) - 1:
-            break
-        x1, y1 = best[index]
-        x2, y2 = best[index + 1]
-        total_distance += abs(x1 - x2) + abs(y1 - y2)
-    
-    print(f"Best Individual: {best}, Total Distance to Walk: {total_distance}")
+        frontier = PriorityQueue()
+        frontier.put(start, 0)
+        came_from = {}
+        cost_so_far = {}
+        came_from[start] = None
+        cost_so_far[start] = 0
+        
+        while not frontier.empty():
+            current = frontier.get()
+            
+            if current == goal:
+                break
+
+            cells_nearby = []
+            for pos, key_value in self.cells_known.items():
+                if abs(pos[0] - current[0]) <= 1 and abs(pos[1] - current[1]) <= 1 and (key_value["visited"] == True or pos == goal):
+                    cells_nearby.append(pos)
+
+            for next in cells_nearby:
+                new_cost = cost_so_far[current] + self.update_costs(current, next, cells_dict)
+                if next not in cost_so_far.keys() or new_cost < cost_so_far[next]:
+                    cost_so_far[next] = new_cost
+                    priority = new_cost + heuristic(next, goal)
+                    frontier.put(next, priority)
+                    came_from[next] = current
+
+        if goal not in came_from:
+            return [], -1
+
+        path = reconstruct_path(came_from, start, goal)
+
+        return path, cost_so_far[goal]

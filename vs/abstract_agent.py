@@ -191,18 +191,21 @@ class AbstAgent:
 
         return adjacents
     
-    def update_costs(self, current_point, next_point):
+    def update_costs(self, current_point, next_point, cells_dict=None):
         dx = current_point[0] - next_point[0]
         dy = current_point[1] - next_point[1]
         
-        difficulty = self.cells_known[next_point]["difficulty"]
+        if not cells_dict:
+            cells_dict = self.cells_known
+        
+        difficulty = cells_dict[next_point]["difficulty"]
 
         if dx == 0 or dy == 0:
             return difficulty * self.COST_LINE
         else:
             return difficulty * self.COST_DIAG
 
-    def a_star_search(self, start, goal):
+    def a_star_search(self, start, goal, cells_dict=None):
 
         def heuristic(a, b):
             (x1, y1) = a
@@ -217,6 +220,11 @@ class AbstAgent:
                 current = came_from[current]
             path.append(start) 
             return path
+        
+        if not cells_dict:
+            cells_dict = self.cells_known
+
+        assert type(cells_dict) == dict, 'cells_dict invalid or self.cells_known is not a dict'
 
         frontier = PriorityQueue()
         frontier.put(start, 0)
@@ -237,7 +245,7 @@ class AbstAgent:
                     cells_nearby.append(pos)
 
             for next in cells_nearby:
-                new_cost = cost_so_far[current] + self.update_costs(current, next)
+                new_cost = cost_so_far[current] + self.update_costs(current, next, cells_dict)
                 if next not in cost_so_far.keys() or new_cost < cost_so_far[next]:
                     cost_so_far[next] = new_cost
                     priority = new_cost + heuristic(next, goal)
