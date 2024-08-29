@@ -86,7 +86,8 @@ class Rescuer(AbstAgent):
                     self.victims[key] = victims[key]
         
         for key in cells_known.keys():
-            if key not in self.cells_known.keys():
+            # Save only visited cells from map
+            if cells_known[key]["visited"] and (key not in self.cells_known.keys()):
                     self.cells_known[key] = cells_known[key]
 
         self.received_maps += 1
@@ -96,7 +97,9 @@ class Rescuer(AbstAgent):
         # If the captain has received all the maps, cluster them and distribute through the rescuers
         if self.received_maps >= self.n_resc:
 
-            # Alterar para estimar a gravidade de cada vitima ()
+            self.update_joined_maps_cost()
+
+            # self.draw_map()
 
             self.predict_gravity()
 
@@ -110,7 +113,62 @@ class Rescuer(AbstAgent):
             self.go_save_victims(self.cells_known, self.victims, victim_clusters[0])     
 
 
-    def predict_gravity(self, model_filename='neural_network_model.pkl'):
+    def draw_map(self):
+        for key, item in  self.cells_known.items():
+            print(f'{key}: {item}')
+        x_values = [key[0] for key in self.cells_known.keys()]
+        y_values = [key[1] for key in self.cells_known.keys()]
+        min_x = min(x_values)
+        max_x = max(x_values)
+        min_y = min(y_values)
+        max_y = max(y_values)
+
+        for y in range(min_y, max_y+1):
+            st = ""
+            for x in range(min_x, max_x+1):
+                if (x, y) in self.cells_known.keys():
+                    st += f'{int(self.cells_known[(x, y)]["cost_to_base"]):3d} '
+                else:
+                    st += "___ "
+            print(st)
+
+
+    def update_joined_maps_cost(self):
+
+        def get_adjacents(position):
+            adjacents = []
+            for pos in self.cells_known.keys():
+                if abs(pos[0] - position[0]) <= 1 and abs(pos[1] - position[1]) <= 1:
+                    adjacents.append(pos)
+
+            return adjacents
+        
+        def flood_fill(current_pos, current_cost):
+
+            if self.cells_known[current_pos]['cost_to_base'] is None or current_cost < self.cells_known[current_pos]['cost_to_base']:
+                self.cells_known[current_pos]['cost_to_base'] = current_cost
+            else: 
+                current_cost = self.cells_known[current_pos]['cost_to_base']
+            
+            adjacents = get_adjacents(current_pos)
+            
+            for next_pos in adjacents:
+                step_cost = self.update_costs(current_pos, next_pos)
+                next_cost = self.cells_known[next_pos]['cost_to_base']
+                if (next_cost is None) or (next_cost > current_cost + step_cost):
+                    flood_fill(next_pos, current_cost + step_cost)
+
+
+        for key in self.cells_known.keys():
+            self.cells_known[key]["cost_to_base"] = None
+
+        # cost to base is 0
+        self.cells_known[(0,0)]["cost_to_base"] = 0
+
+        flood_fill((0,0), 0)
+
+
+    def predict_gravity(self, model_filename='gradient_boosting_model.pkl'):
         
         model = regressor.load_model(model_filename)
         
@@ -125,7 +183,7 @@ class Rescuer(AbstAgent):
         for i, key in enumerate(self.victims.keys()):
             assert victims_signals[i] == self.victims[key]["signals"][-3:], 'Wrong victim'
 
-            self.victims[key]["grav"] = grav[i][0]            
+            self.victims[key]["grav"] = grav[i]       
 
 
     def k_means_clustering(self, victims, k, max_iterations=100):      
@@ -185,7 +243,6 @@ class Rescuer(AbstAgent):
                     sse += (point[0]-centroids[i][0])**2 + (point[1]-centroids[i][1])**2
 
                     victim = self.victims[point]
-                    # TODO: Change:
                     grav = victim['grav']
                     label = 1
                     #  𝑖𝑑, 𝑥, 𝑦, 0.0, 1 (id é a identificação da vítima, x e y, a posição dela e os dois últimos valores correspondem ao valor da gravidade e ao seu label)

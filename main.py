@@ -17,7 +17,7 @@ def main(data_folder_name):
     # Instantiate the environment
     env = Env(data_folder)
     
-    N_AGENTS = 2
+    N_AGENTS = 4
 
     # Directions from AbstAgent.AC_INC
     # Performs a TopRight, BottomLeft, BottomRight, TopLeft, Up, Down, Right, Left
@@ -50,9 +50,9 @@ if __name__ == '__main__':
         data_folder_name = sys.argv[1]
     else:
         # data_folder_name = os.path.join("datasets", "data_10v_12x12")
-        data_folder_name = os.path.join("datasets", "data_42v_20x20")
+        # data_folder_name = os.path.join("datasets", "data_42v_20x20")
         # data_folder_name = os.path.join("datasets", "data_132v_100x80")
         # data_folder_name = os.path.join("datasets", "data_225v_100x80")
-        # data_folder_name = os.path.join("datasets", "data_300v_90x90")
+        data_folder_name = os.path.join("datasets", "data_300v_90x90")
         
     main(data_folder_name)

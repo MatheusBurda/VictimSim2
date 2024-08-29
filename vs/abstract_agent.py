@@ -7,6 +7,36 @@ import os
 import random
 from abc import ABC, abstractmethod
 from .constants import VS
+import heapq
+
+class PriorityQueue:
+    def __init__(self):
+        self.elements = []
+    
+    def empty(self) -> bool:
+        return not self.elements
+    
+    def put(self, item, priority: float):
+        heapq.heappush(self.elements, (priority, item))
+    
+    def get(self):
+        return heapq.heappop(self.elements)[1]
+
+
+class Stack:
+    def __init__(self):
+        self.items = []
+
+    def push(self, item):
+        self.items.append(item)
+
+    def pop(self):
+        if not self.is_empty():
+            return self.items.pop()
+
+    def is_empty(self):
+        return len(self.items) == 0
+
 
 class AbstAgent:
     """ This class represents a generic agent and must be implemented by a concrete class. """
@@ -153,4 +183,71 @@ class AbstAgent:
         - False when there is no victim at the current position of the agent"""
         return self.__body._first_aid()
 
+    def get_adjacents_unvisited(self, location):
+        adjacents = []
+        for pos, key_value in self.cells_known.items():
+            if abs(pos[0] - location[0]) <= 1 and abs(pos[1] - location[1]) <= 1 and (key_value["visited"] == False):
+                adjacents.append(pos)
+
+        return adjacents
+    
+    def update_costs(self, current_point, next_point):
+        dx = current_point[0] - next_point[0]
+        dy = current_point[1] - next_point[1]
+        
+        difficulty = self.cells_known[next_point]["difficulty"]
+
+        if dx == 0 or dy == 0:
+            return difficulty * self.COST_LINE
+        else:
+            return difficulty * self.COST_DIAG
+
+    def a_star_search(self, start, goal):
+
+        def heuristic(a, b):
+            (x1, y1) = a
+            (x2, y2) = b
+            return abs(x1 - x2) + abs(y1 - y2)
+
+        def reconstruct_path(came_from, start, goal):
+            current = goal
+            path = []
+            while current != start:
+                path.append(current)
+                current = came_from[current]
+            path.append(start) 
+            return path
+
+        frontier = PriorityQueue()
+        frontier.put(start, 0)
+        came_from = {}
+        cost_so_far = {}
+        came_from[start] = None
+        cost_so_far[start] = 0
+        
+        while not frontier.empty():
+            current = frontier.get()
+            
+            if current == goal:
+                break
+
+            cells_nearby = []
+            for pos, key_value in self.cells_known.items():
+                if abs(pos[0] - current[0]) <= 1 and abs(pos[1] - current[1]) <= 1 and (key_value["visited"] == True or pos == goal):
+                    cells_nearby.append(pos)
+
+            for next in cells_nearby:
+                new_cost = cost_so_far[current] + self.update_costs(current, next)
+                if next not in cost_so_far.keys() or new_cost < cost_so_far[next]:
+                    cost_so_far[next] = new_cost
+                    priority = new_cost + heuristic(next, goal)
+                    frontier.put(next, priority)
+                    came_from[next] = current
+
+        if goal not in came_from:
+            return [], -1
+
+        path = reconstruct_path(came_from, start, goal)
+
+        return path, cost_so_far[goal]
 
